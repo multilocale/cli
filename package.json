@@ -1,0 +1,52 @@
+{
+  "name": "multilocale",
+  "version": "1.0.1",
+  "private": false,
+  "description": "multilocale cli to download translation files from multilocale.com",
+  "license": "Apache-2.0",
+  "repository": "github:multilocale/cli",
+  "homepage": "https://www.multilocale.com/developers/",
+  "author": "Multilocale",
+  "type": "commonjs",
+  "main": "./dist/index.js",
+  "bin": {
+    "multilocale": "./dist/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.js",
+    "develop": "node index.js",
+    "prepublishOnly": "npm run build",
+    "publish:npm": "npm publish --access public",
+    "publish:repo": "node scripts/publishCli.mjs"
+  },
+  "files": [
+    "dist",
+    "skills"
+  ],
+  "keywords": [
+    "multi-language",
+    "multilingual",
+    "translate",
+    "localize",
+    "internationalize",
+    "translation",
+    "i18n"
+  ],
+  "dependencies": {
+    "commander": "8.3.0",
+    "fs-extra": "10.1.0",
+    "inquirer": "8.2.5",
+    "node-localstorage": "2.2.1",
+    "xml2js": "0.4.23"
+  },
+  "devDependencies": {
+    "@monorepool/shared": "0.0.0",
+    "@multilocale/client": "0.0.0",
+    "esbuild": "0.25.4",
+    "eslint": "10.8.0",
+    "openai": "5.8.3"
+  }
+}

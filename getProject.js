@@ -1,0 +1,66 @@
+/* Copyright 2013 - 2024 Waiterio LLC */
+const inquirer = require('inquirer')
+const getProjectModule = require('@multilocale/client/getProject.js')
+const getProjectsModule = require('@multilocale/client/getProjects.js')
+
+const getProjectHttp = getProjectModule.default || getProjectModule
+const getProjects = getProjectsModule.default || getProjectsModule
+const getConfig = require('./getConfig.js')
+const setConfig = require('./setConfig.js')
+
+module.exports = async function getProject(options) {
+  let projectIdOrName = options?.project
+  let project
+
+  const config = getConfig()
+
+  if (!projectIdOrName) {
+    projectIdOrName = config?.projectId
+  }
+
+  if (!projectIdOrName) {
+    const projects = await getProjects()
+
+    if (projects.length === 0) {
+      throw new Error(
+        'There are no projects. Create one first at https://app.multilocale.com/projects/new',
+      )
+    } else if (projects.length === 1) {
+      projectIdOrName = projects[0]._id
+      project = projects[0] // eslint-disable-line prefer-destructuring
+    } else {
+      const choices = projects
+        .map(project => ({
+          name: project.name,
+          value: project._id,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+
+      const answers = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'projectId',
+          message: 'Which project?',
+          choices,
+        },
+      ])
+
+      projectIdOrName = answers.projectId
+      project = projects.find(project => project._id === projectIdOrName)
+    }
+
+    if (project && !config) {
+      setConfig({
+        organizationId: project.organizationId,
+        projectId: project._id,
+      })
+      console.log('created multilocale.json with default projectId')
+    }
+  }
+
+  if (!project && projectIdOrName) {
+    project = await getProjectHttp(projectIdOrName)
+  }
+
+  return project
+}
