@@ -3,17 +3,20 @@ const fs = require('fs-extra')
 const path = require('node:path')
 const commander = require('commander')
 const xml2js = require('xml2js')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
 const addPhrases = require('@multilocale/client/addPhrases.js')
 const translateString = require('@multilocale/client/translateString.js')
 const uuid = require('@multilocale/client/uuid.js')
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const ensureAuth = require('./ensureAuth.js')
 const _getAndroidResPath = require('./getAndroidResPath.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
 const getProject = require('./getProject.js')
-const login = require('./login.js')
 
 function convertXmlStringToJson(xml) {
   return new Promise((resolve, reject) => {
@@ -31,26 +34,26 @@ function importCommand() {
   const command = new commander.Command('import')
   command.description('import local translation files into multilocale.com')
   command.option('--project [project]', 'project id or name')
+  withJson(command)
   command.action(async options => {
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
+
     try {
-      console.log('import into multilocale.com')
+      print('import into multilocale.com')
 
-      rehydrateSession()
-
-      if (!isLoggedInSession()) {
-        await login()
-      }
+      await ensureAuth()
 
       const project = await getProject(options)
       const defaultLocale = project.defaultLocale || 'en'
 
       if (isAndroid()) {
-        console.log('Android project detected')
+        print('Android project detected')
 
         let files = getFiles()
         files = files.filter(file => file.endsWith('strings.xml'))
 
-        console.log(`Found ${files.length} languages`)
+        print(`Found ${files.length} languages`)
 
         let phrases = []
 
@@ -65,14 +68,9 @@ function importCommand() {
           if (stringsXmlPath.startsWith('/')) {
             stringsXmlPath = stringsXmlPath.slice(1)
           }
-          // console.log({ stringsXmlPath })
           const stringsXml = fs.readFileSync(stringsXmlPath, 'utf8')
 
-          // console.log({ stringsXml })
-
           const stringsJson = await convertXmlStringToJson(stringsXml)
-
-          // console.log(JSON.stringify(stringsJson, null, 2))
 
           const phrasesForLanguage = stringsJson.resources.string.map(
             ({ $: { name }, _ }) => ({
@@ -89,24 +87,34 @@ function importCommand() {
             }),
           )
 
-          console.log(`${language}: Found ${phrasesForLanguage.length} phrases`)
+          print(`${language}: Found ${phrasesForLanguage.length} phrases`)
 
           phrases = phrases.concat(phrasesForLanguage)
         }
 
-        // console.log({ phrases })
-
         await addPhrases(phrases)
+
+        if (options.json) {
+          printJson({
+            ok: true,
+            project: project.name,
+            projectId: project._id,
+            phrases: phrases.length,
+            url: `https://app.multilocale.com/projects/${project._id}`,
+          })
+
+          return
+        }
 
         console.log(
           `Added ${phrases.length} phrases: https://app.multilocale.com/projects/${project._id}`,
         )
       } else if (isJavascript()) {
-        console.log('Javascript project detected')
+        print('Javascript project detected')
 
         const files = getFiles()
         const { locales, paths } = project
-        console.log({ locales, paths })
+        print({ locales, paths })
 
         const locale2files = {}
         paths.forEach(path_ => {
@@ -116,7 +124,7 @@ function importCommand() {
               const matchingFiles = files.filter(file => file.endsWith(suffix))
 
               if (matchingFiles.length === 0) {
-                console.log(
+                print(
                   `No matching files for path ${path_} and locale ${locale}`,
                 )
               } else {
@@ -127,18 +135,18 @@ function importCommand() {
                 if (matchingFiles.length === 1) {
                   locale2files[locale].push(matchingFiles[0])
                 } else if (matchingFiles.length > 1) {
-                  console.log(
+                  print(
                     `Found multiple matching files for path ${path_} and locale ${locale}:`,
                   )
                   matchingFiles.forEach(matchingFile => {
-                    console.log(`  ${matchingFile}`)
+                    print(`  ${matchingFile}`)
                     locale2files[locale].push(matchingFile)
                   })
                 }
               }
             })
           } else {
-            console.log(`Path ${path_} does not include %lang%`)
+            print(`Path ${path_} does not include %lang%`)
           }
         })
 
@@ -146,10 +154,10 @@ function importCommand() {
         const filesFound = Object.values(locale2files).flat()
 
         if (filesFound.length > 0) {
-          console.log(
+          print(
             `Found ${filesFound.length} files in ${localesFound.length} locales:`,
           )
-          filesFound.forEach(fileFound => console.log(`  ${fileFound}`))
+          filesFound.forEach(fileFound => print(`  ${fileFound}`))
 
           const key2locale2phrase = {}
 
@@ -168,10 +176,7 @@ function importCommand() {
 
               const fileString = fs.readFileSync(filePath, 'utf8')
 
-              // console.log({ fileString })
-
               const extension = path.extname(file)
-              // console.log({ extension })
 
               let json
 
@@ -223,7 +228,7 @@ function importCommand() {
                 }
               })
 
-              console.log(`${language}: Found ${phrasesForLanguage} phrases`)
+              print(`${language}: Found ${phrasesForLanguage} phrases`)
             }
           }
 
@@ -280,7 +285,7 @@ function importCommand() {
                     projectsIds: [project._id],
                   }
 
-                  console.log(`${to}: translated key ${key} to ${translation}`)
+                  print(`${to}: translated key ${key} to ${translation}`)
 
                   key2locale2phrase[key][to] = phraseTo
                 }),
@@ -295,17 +300,37 @@ function importCommand() {
 
           await addPhrases(phrases)
 
+          if (options.json) {
+            printJson({
+              ok: true,
+              project: project.name,
+              projectId: project._id,
+              phrases: phrases.length,
+              url: `https://app.multilocale.com/projects/${project._id}`,
+            })
+
+            return
+          }
+
           console.log(
             `Added ${phrases.length} phrases: https://app.multilocale.com/projects/${project._id}`,
           )
         } else {
+          if (options.json) {
+            printJson({ ok: true, project: project.name, phrases: 0 })
+
+            return
+          }
+
           console.log('Could not find any file matching paths in project')
         }
       } else {
-        console.log('Could not detect project type')
+        throw new Error(
+          'Could not detect project type — run from the app root (Android needs an AndroidManifest.xml, JavaScript a package.json)',
+        )
       }
     } catch (error) {
-      console.log(error)
+      fail(error, { json: options.json })
     }
   })
 

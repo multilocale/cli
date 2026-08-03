@@ -8,6 +8,7 @@ const envValue = envIndex !== -1 ? process.argv[envIndex + 1] : undefined
 process.env.WAITERIO_ENV = envValue || 'production'
 
 const program = require('commander')
+const skillsCommand = require('@monorepool/agentfirst/skillsCommand.js')
 const addCommand = require('./addCommand.js')
 const deleteCommand = require('./deleteCommand.js')
 const downloadCommand = require('./downloadCommand.js')
@@ -18,13 +19,15 @@ const loginCommand = require('./loginCommand.js')
 const logoutCommand = require('./logoutCommand.js')
 const phrasesCommand = require('./phrasesCommand.js')
 const projectsCommand = require('./projectsCommand.js')
+const schemaCommand = require('./schemaCommand.js')
 const shareCommand = require('./shareCommand.js')
-const skillsCommand = require('./skillsCommand.js')
+const signupCommand = require('./signupCommand.js')
 const unusedCommand = require('./unusedCommand.js')
 const updateCommand = require('./updateCommand.js')
 const packageJson = require('./package.json')
 
 program
+  .name('multilocale')
   .description('manage phrases')
   .version(packageJson.version)
   .option('-e, --env <environment>', 'environment (default: production)')
@@ -38,8 +41,14 @@ program
   .addCommand(logoutCommand())
   .addCommand(phrasesCommand())
   .addCommand(projectsCommand())
+  // `schema` receives the composed program so it describes the CLI exactly as
+  // it runs; `skills` reads the guides copied next to the bundle by
+  // scripts/build.js (baseDirectory anchors the lookup after esbuild inlines
+  // the shared factory).
+  .addCommand(schemaCommand(program))
   .addCommand(shareCommand())
-  .addCommand(skillsCommand())
+  .addCommand(signupCommand())
+  .addCommand(skillsCommand({ baseDirectory: __dirname }))
   .addCommand(unusedCommand())
   .addCommand(updateCommand())
   .parse(process.argv)

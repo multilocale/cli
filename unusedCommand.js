@@ -2,41 +2,44 @@
 const fs = require('fs-extra')
 const path = require('node:path')
 const commander = require('commander')
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
+const ensureAuth = require('./ensureAuth.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
 const getProject = require('./getProject.js')
-const login = require('./login.js')
 
 function unusedCommand() {
   const command = new commander.Command('unused')
   command.description('find translation keys not used in any source file')
   command.option('--project [project]', 'project id or name')
+  withJson(command)
   command.action(async options => {
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
+
     try {
-      console.log('find unused strings in project')
+      print('find unused strings in project')
 
-      rehydrateSession()
-
-      if (!isLoggedInSession()) {
-        await login()
-      }
+      await ensureAuth()
 
       const project = await getProject(options)
       const _defaultLocale = project.defaultLocale || 'en'
 
       if (isAndroid()) {
-        console.log('Android project detected')
+        print('Android project detected')
 
         throw new Error('Not implemented yet')
       } else if (isJavascript()) {
-        console.log('Javascript project detected')
+        print('Javascript project detected')
 
         let files = getFiles()
         const { locales, paths } = project
-        console.log({ locales, paths })
+        print({ locales, paths })
 
         const locale2files = {}
         paths.forEach(path_ => {
@@ -46,7 +49,7 @@ function unusedCommand() {
               const matchingFiles = files.filter(file => file.endsWith(suffix))
 
               if (matchingFiles.length === 0) {
-                console.log(
+                print(
                   `No matching files for path ${path_} and locale ${locale}`,
                 )
               } else {
@@ -57,18 +60,18 @@ function unusedCommand() {
                 if (matchingFiles.length === 1) {
                   locale2files[locale].push(matchingFiles[0])
                 } else if (matchingFiles.length > 1) {
-                  console.log(
+                  print(
                     `Found multiple matching files for path ${path_} and locale ${locale}:`,
                   )
                   matchingFiles.forEach(matchingFile => {
-                    console.log(`  ${matchingFile}`)
+                    print(`  ${matchingFile}`)
                     locale2files[locale].push(matchingFile)
                   })
                 }
               }
             })
           } else {
-            console.log(`Path ${path_} does not include %lang%`)
+            print(`Path ${path_} does not include %lang%`)
           }
         })
 
@@ -78,10 +81,10 @@ function unusedCommand() {
         const keysObject = {}
 
         if (filesFound.length > 0) {
-          console.log(
+          print(
             `Found ${filesFound.length} files in ${localesFound.length} locales:`,
           )
-          filesFound.forEach(fileFound => console.log(`  ${fileFound}`))
+          filesFound.forEach(fileFound => print(`  ${fileFound}`))
 
           for (let l = 0; l < localesFound.length; l += 1) {
             const locale = localesFound[l]
@@ -98,10 +101,7 @@ function unusedCommand() {
 
               const fileString = fs.readFileSync(filePath, 'utf8')
 
-              // console.log({ fileString })
-
               const extension = path.extname(file)
-              // console.log({ extension })
 
               let json
 
@@ -125,19 +125,18 @@ function unusedCommand() {
                 keysObject[key] = true
               })
 
-              console.log(`${language}: Found ${keys.length} keys`)
+              print(`${language}: Found ${keys.length} keys`)
             }
           }
 
           const keys = Object.keys(keysObject)
 
-          console.log(
+          print(
             `Found ${keys.length} unique keys across all ${localesFound.length} locales`,
           )
 
           const extensions = ['.js', '.jsx', '.ts', '.tsx', '.cjs', '.mjs']
           files = files.filter(file => extensions.includes(path.extname(file)))
-          // files = files.slice(0, 10);
 
           for (let f = 0; f < files.length; f += 1) {
             const file = files[f]
@@ -156,6 +155,13 @@ function unusedCommand() {
           }
 
           const unusedKeys = Object.keys(keysObject)
+
+          if (options.json) {
+            printJson(unusedKeys)
+
+            return
+          }
+
           console.log(
             `${
               unusedKeys.length
@@ -165,15 +171,15 @@ function unusedCommand() {
           )
           console.log(unusedKeys)
         } else {
-          console.log('Could not find any file matching paths in project')
+          throw new Error('Could not find any file matching paths in project')
         }
-
-        const _phrases = []
       } else {
-        console.log('Could not detect project type')
+        throw new Error(
+          'Could not detect project type — run from the app root (Android needs an AndroidManifest.xml, JavaScript a package.json)',
+        )
       }
     } catch (error) {
-      console.log(error)
+      fail(error, { json: options.json })
     }
   })
 

@@ -1,5 +1,10 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
 const commander = require('commander')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
 const addPhrasesModule = require('@multilocale/client/addPhrases.js')
 const getPhrasesModule = require('@multilocale/client/getPhrases.js')
 const translateToAllLanguagesModule = require('@multilocale/client/translateToAllLanguages.js')
@@ -10,10 +15,8 @@ const getPhrases = getPhrasesModule.default || getPhrasesModule
 const translateToAllLanguages =
   translateToAllLanguagesModule.default || translateToAllLanguagesModule
 const uuid = uuidModule.default || uuidModule
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const ensureAuth = require('./ensureAuth.js')
 const getProject = require('./getProject.js')
-const login = require('./login.js')
 
 function addCommand() {
   const command = new commander.Command('add')
@@ -35,97 +38,109 @@ function addCommand() {
     '-c, --context <context>',
     'context hint passed to the translation model to disambiguate meaning',
   )
+  withJson(command)
   command.action(async (key, value, options) => {
-    console.log('add string')
-    if (!value) {
-      value = value || key
-      console.log('value not provided, using key as value')
-    }
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
 
-    const { model, context } = options
+    try {
+      print('add string')
+      if (!value) {
+        value = value || key
+        print('value not provided, using key as value')
+      }
 
-    rehydrateSession()
+      const { model, context } = options
 
-    if (!isLoggedInSession()) {
-      await login()
-    }
+      await ensureAuth()
 
-    const project = await getProject(options)
-    const language = project.defaultLocale || 'en'
+      const project = await getProject(options)
+      const language = project.defaultLocale || 'en'
 
-    const existingPhrases = await getPhrases({
-      key,
-      language,
-      project: project.name,
-    })
-
-    if (existingPhrases?.length > 0) {
-      console.error(
-        `Error: a phrase with key "${key}" already exists in project "${project.name}"`,
-      )
-      process.exit(1)
-    }
-
-    const phrases = []
-
-    const phraseOriginal = {
-      _id: uuid(),
-      key,
-      value,
-      language,
-      creationTime: new Date().toISOString(),
-      lastEditTime: new Date().toISOString(),
-      googleTranslate: false,
-      machineTranslated: false,
-      model: null,
-      context: context || null,
-      organizationId: project.organizationId,
-      projects: [project.name],
-      projectsIds: [project._id],
-    }
-
-    // console.log({ phraseOriginal })
-
-    phrases.push(phraseOriginal)
-    console.log(`${language}: ${value}`)
-
-    const targetLocales = project.locales.filter(l => l !== language)
-
-    if (targetLocales.length > 0) {
-      const language2value = await translateToAllLanguages({
-        value: phraseOriginal.value,
-        languages: targetLocales,
-        from: language,
-        model,
-        context,
-        projectId: project._id,
+      const existingPhrases = await getPhrases({
+        key,
+        language,
+        project: project.name,
       })
 
-      targetLocales.forEach(locale => {
-        const translation = language2value[locale]
-        const phrase = {
-          ...phraseOriginal,
-          _id: uuid(),
-          language: locale,
-          googleTranslate: true,
-          machineTranslated: true,
+      if (existingPhrases?.length > 0) {
+        throw new Error(
+          `a phrase with key "${key}" already exists in project "${project.name}"`,
+        )
+      }
+
+      const phrases = []
+
+      const phraseOriginal = {
+        _id: uuid(),
+        key,
+        value,
+        language,
+        creationTime: new Date().toISOString(),
+        lastEditTime: new Date().toISOString(),
+        googleTranslate: false,
+        machineTranslated: false,
+        model: null,
+        context: context || null,
+        organizationId: project.organizationId,
+        projects: [project.name],
+        projectsIds: [project._id],
+      }
+
+      phrases.push(phraseOriginal)
+      print(`${language}: ${value}`)
+
+      const targetLocales = project.locales.filter(l => l !== language)
+
+      if (targetLocales.length > 0) {
+        const language2value = await translateToAllLanguages({
+          value: phraseOriginal.value,
+          languages: targetLocales,
+          from: language,
           model,
-          context: null,
-          value: translation,
-        }
+          context,
+          projectId: project._id,
+        })
 
-        phrases.push(phrase)
-        console.log(`${locale}: ${translation}`)
-      })
+        targetLocales.forEach(locale => {
+          const translation = language2value[locale]
+          const phrase = {
+            ...phraseOriginal,
+            _id: uuid(),
+            language: locale,
+            googleTranslate: true,
+            machineTranslated: true,
+            model,
+            context: null,
+            value: translation,
+          }
+
+          phrases.push(phrase)
+          print(`${locale}: ${translation}`)
+        })
+      }
+
+      await addPhrases(phrases)
+
+      if (options.json) {
+        printJson({
+          ok: true,
+          key,
+          project: project.name,
+          projectId: project._id,
+          phrases: phrases.length,
+          url: `https://app.multilocale.com/projects/${project._id}`,
+        })
+
+        return
+      }
+
+      console.log(
+        `Added ${phrases.length} phrases: https://app.multilocale.com/projects/${project._id}`,
+      )
+    } catch (error) {
+      fail(error, { json: options.json })
     }
-
-    // console.log(JSON.stringify(phrases, null, 2))
-
-    await addPhrases(phrases)
-
-    console.log(
-      `Added ${phrases.length} phrases: https://app.multilocale.com/projects/${project._id}`,
-    )
   })
 
   return command

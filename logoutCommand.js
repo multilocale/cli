@@ -1,23 +1,14 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const clearSession = require('./session/clearSession.js')
+const agentfirstLogoutCommand = require('@monorepool/agentfirst/logoutCommand.js')
+const { BINARY_NAME, ENV_KEY_NAME } = require('./cliConfig.js')
+const session = require('./sessionStore.js')
 
 function logoutCommand() {
-  const command = new commander.Command('logout')
-  command.description('log out from your multilocale.com account')
-  command.action(async () => {
-    try {
-      console.log('logout')
-
-      clearSession()
-
-      console.log('logged out')
-    } catch (error) {
-      console.log('error', error)
-    }
+  return agentfirstLogoutCommand({
+    binaryName: BINARY_NAME,
+    session,
+    envKeyName: ENV_KEY_NAME,
   })
-
-  return command
 }
 
 module.exports = logoutCommand

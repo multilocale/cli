@@ -34,22 +34,72 @@ fr: Enregistrer les modifications
 Added 3 phrases: https://app.multilocale.com/projects/64a1f2c9e4b0a1b2c3d4e5f6
 ```
 
+## Signing up
+
+No account yet? Create one from the terminal — the generated password prints
+exactly once, and the session is stored so every other command works
+immediately:
+
+```bash
+multilocale signup --email founder@example.com --json
+```
+
 ## Authentication
 
-`multilocale login` starts a temporary localhost server, opens your browser
-to app.multilocale.com, and receives the session tokens on the redirect back.
-If the browser does not open, the login URL is printed so you can visit it by
-hand. Tokens are stored in `~/.multilocale/` and refreshed automatically when
-they expire; `multilocale logout` clears them. Commands that need a session
-start the browser login on their own when none exists.
+There are two ways in:
+
+```bash
+multilocale login              # interactive: choose browser or API key
+multilocale login --browser    # browser flow
+multilocale login --with-key   # masked prompt for an API key secret
+multilocale logout             # clear the stored session and any stored key
+```
+
+`multilocale login --browser` starts a temporary localhost server, opens your
+browser to app.multilocale.com, and receives the session tokens on the
+redirect back. If the browser does not open, the login URL is printed so you
+can visit it by hand. Tokens are stored in `~/.multilocale/` and refreshed
+automatically when they expire.
+
+`multilocale login --with-key` prompts (masked) for an API key secret, created
+per project on app.multilocale.com under the project's API keys page, verifies
+it against the API, and stores it in `~/.multilocale/`. Alternatively export
+`MULTILOCALE_API_KEY=<key secret>` — no login step needed, the key is read
+from the environment on every command. The secret is never accepted as a
+command-line argument. New keys default to read-only scopes; widen them on
+the key's page before running write commands.
+
+Precedence: a stored browser session wins over a stored key, which wins over
+the environment variable — so an exported `MULTILOCALE_API_KEY` never silently
+hijacks an interactive session.
+
+In an interactive terminal, commands that need a session and find none start
+the browser login on their own. Without a terminal (agents, CI, pipes) they
+fail fast with exit code 1 and login instructions on stderr instead of opening
+a browser.
+
+## Machine-readable output
+
+Every data command accepts `--json`: raw, parseable JSON on stdout, no color.
+Mutations print a small result object (`{ "ok": true, … }`). Errors always go
+to stderr with exit code 1 — as a single-line JSON object when `--json` is
+set — and progress logs move to stderr in json mode, so stdout is exactly the
+JSON result.
+
+```bash
+multilocale projects list --json
+multilocale phrases get SOME_KEY --json
+multilocale schema                  # the whole command tree as JSON
+multilocale schema phrases list     # one subcommand's arguments and flags
+```
 
 ## Commands
 
 ### Session
 
 ```bash
-multilocale login    # log in via browser; tokens land in ~/.multilocale/
-multilocale logout   # clear the stored session
+multilocale login    # log in via browser or API key; credentials land in ~/.multilocale/
+multilocale logout   # clear the stored session and any stored key
 ```
 
 ### Projects
@@ -153,6 +203,13 @@ so treat the output as candidates. Android projects are not supported yet.
 ```bash
 multilocale skills list              # names and descriptions of the bundled agent guides
 multilocale skills get multilocale   # print a bundled SKILL.md to stdout
+```
+
+### Schema
+
+```bash
+multilocale schema                   # the whole command tree as JSON
+multilocale schema projects create   # one command's arguments and flags
 ```
 
 ## Machine translation

@@ -1,12 +1,15 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
 const commander = require('commander')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
 const getPhrasesModule = require('@multilocale/client/getPhrases.js')
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const ensureAuth = require('./ensureAuth.js')
 const getProject = require('./getProject.js')
-const login = require('./login.js')
 
 const bold = text => `\x1b[1m${text}\x1b[22m`
 const cyan = text => `\x1b[36m${text}\x1b[39m`
@@ -20,18 +23,18 @@ function duplicatesCommand() {
     'find phrase keys with duplicate values in the default language',
   )
   command.option('--project [project]', 'project id or name')
+  withJson(command)
   command.action(async options => {
-    try {
-      rehydrateSession()
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
 
-      if (!isLoggedInSession()) {
-        await login()
-      }
+    try {
+      await ensureAuth()
 
       const project = await getProject(options)
       const language = project.defaultLocale || 'en'
 
-      console.log(
+      print(
         `Fetching phrases for language "${language}" in project "${project.name}"...`,
       )
 
@@ -56,6 +59,14 @@ function duplicatesCommand() {
       const duplicates = Object.entries(valueToEntries).filter(
         ([, entries]) => entries.length > 1,
       )
+
+      if (options.json) {
+        printJson(
+          duplicates.map(([value, entries]) => ({ value, entries })),
+        )
+
+        return
+      }
 
       if (duplicates.length === 0) {
         console.log(green('No duplicate values found.'))
@@ -85,7 +96,7 @@ function duplicatesCommand() {
         })
       }
     } catch (error) {
-      console.log(error)
+      fail(error, { json: options.json })
     }
   })
 

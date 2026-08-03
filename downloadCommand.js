@@ -3,11 +3,15 @@ const commander = require('commander')
 const { execSync } = require('child_process')
 const fs = require('fs-extra')
 const path = require('node:path')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
 const getPhrasesModule = require('@multilocale/client/getPhrases.js')
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const ensureAuth = require('./ensureAuth.js')
 const getAndroidResPath = require('./getAndroidResPath.js')
 const getConfig = require('./getConfig.js')
 const getExtension = require('./getExtension.js')
@@ -16,7 +20,6 @@ const getHeader = require('./getHeader.js')
 const getProject = require('./getProject.js')
 const getPostScript = require('./getPostScript.js')
 const isAndroid = require('./isAndroid.js')
-const login = require('./login.js')
 
 function sortObject(o) {
   return Object.keys(o)
@@ -67,15 +70,15 @@ function downloadCommand() {
     '--post-script [post-script]',
     'post-script to run after downloading dictionary files',
   )
+  withJson(command)
   command.action(async options => {
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
+
     try {
-      console.log('download')
+      print('download')
 
-      rehydrateSession()
-
-      if (!isLoggedInSession()) {
-        await login()
-      }
+      await ensureAuth()
 
       let project = await getProject(options)
       let format = await getFormat(options)
@@ -83,27 +86,30 @@ function downloadCommand() {
       let header = await getHeader(options)
       let postScript = await getPostScript(options)
 
-      console.log(`Project: ${project.name} (${project._id})`)
-      console.log(`Format: ${format}`)
-      console.log(`Extension: ${extension}`)
+      // Every dictionary file written, as printed, for the json result.
+      const writtenFiles = []
+
+      print(`Project: ${project.name} (${project._id})`)
+      print(`Format: ${format}`)
+      print(`Extension: ${extension}`)
 
       if (header) {
-        console.log(
+        print(
           `Header: ${header.replaceAll('\n', '\\n').replaceAll('\r', '\\r').replaceAll('\t', '\\t')}`,
         )
       }
 
       if (postScript) {
-        console.log(`Post-script: ${postScript}`)
+        print(`Post-script: ${postScript}`)
       }
 
       const phrases = await getPhrases({
         project: project.name,
       })
-      console.log(`Found ${phrases?.length ?? 0} phrases`)
+      print(`Found ${phrases?.length ?? 0} phrases`)
 
       if (isAndroid()) {
-        console.log('Android project detected')
+        print('Android project detected')
         const androidResPath = getAndroidResPath()
 
         const language2key2value = phrases.reduce(
@@ -118,19 +124,15 @@ function downloadCommand() {
           },
           {},
         )
-        // console.log('language2key2value', language2key2value)
         const languages = Object.keys(language2key2value).sort()
 
-        console.log(`Found ${languages?.length ?? 0} languages`)
+        print(`Found ${languages?.length ?? 0} languages`)
 
         for (let l = 0; l < languages.length; l += 1) {
           const language = languages[l]
           const key2value = sortObject(language2key2value[language])
           const keys = Object.keys(key2value)
           const stringsXml =
-            // '/* DO NOT EDIT MANUALLY */\n' +
-            // `/* Edit at https://app.multilocale.com/projects/${project._id} */\n` +
-            // '/* Download translation files with https://github.com/multilocale/multilocale-cli */\n' +
             '<?xml version="1.0" encoding="utf-8"?>\n' +
             `<resources>\n${
             keys.reduce((string, key) => {
@@ -147,23 +149,27 @@ function downloadCommand() {
               ? path.resolve(androidResPath, 'values')
               : path.resolve(androidResPath, `values-${language}`)
 
-          // console.log({ folderPath })
-
           if (!fs.existsSync(folderPath)) {
             fs.mkdirSync(folderPath)
           }
           const stringsXmlPath = path.resolve(folderPath, 'strings.xml')
 
-          // console.log({ stringsXmlPath })
-
           const stringXmlPretty = stringsXml
 
-          // console.log({ stringXmlPretty })
-
           fs.writeFileSync(stringsXmlPath, stringXmlPretty)
-          console.log(
+          writtenFiles.push(stringsXmlPath.replace(path.resolve('.'), ''))
+          print(
             `${language}: ${stringsXmlPath.replace(path.resolve('.'), '')}`,
           )
+        }
+
+        if (options.json) {
+          printJson({
+            ok: true,
+            project: project.name,
+            format: 'android',
+            files: writtenFiles,
+          })
         }
       } else {
         const language2key2value = phrases.reduce(
@@ -231,7 +237,10 @@ function downloadCommand() {
 
               fs.writeFileSync(phrasesDictionaryPath, dictionaryFileContent)
 
-              console.log(
+              writtenFiles.push(
+                phrasesDictionaryPath.replace(path.resolve('.'), ''),
+              )
+              print(
                 `  ${language}: ${phrasesDictionaryPath.replace(
                   path.resolve('.'),
                   '',
@@ -239,41 +248,37 @@ function downloadCommand() {
               )
             })
           } else {
-            console.log(`Path ${path_} does not include %lang%`)
+            print(`Path ${path_} does not include %lang%`)
           }
         })
 
         if (postScript) {
-          console.log(`Running post-script: ${postScript}`)
-          execSync(postScript, { stdio: 'inherit' })
-          console.log('Post-script completed')
+          print(`Running post-script: ${postScript}`)
+          // In json mode the post-script's stdout is routed to stderr so it
+          // cannot pollute the JSON result on stdout.
+          execSync(postScript, {
+            stdio: options.json
+              ? ['ignore', process.stderr, process.stderr]
+              : 'inherit',
+          })
+          print('Post-script completed')
         }
 
-        // let indexJS = ''
-        // languages.forEach(language => {
-        //   indexJS += `const ${language} = require('./${language}.json'\n`)
-        // })
-        // indexJS += '\nmodule.exports = {\n'
-        // languages.forEach(language => {
-        //   indexJS += `  ${language},\n`
-        // })
-        // indexJS += '}\n'
-        // fs.mkdirsSync(path.resolve('./translations'))
-        // fs.writeFileSync(path.resolve('./translations/index), indexJS)
-        // let languagesJS = 'module.exports = [\n'
-        // languages.forEach(language => {
-        //   languagesJS += `  '${language}',\n`
-        // })
-        // languagesJS += ']\n'
-        // fs.writeFileSync(
-        //   path.resolve('./translations/languages),
-        //   languagesJS,
-        // )
+        if (options.json) {
+          printJson({
+            ok: true,
+            project: project.name,
+            format,
+            files: writtenFiles,
+          })
+
+          return
+        }
 
         console.log('Download completed')
       }
     } catch (error) {
-      console.log('error', error)
+      fail(error, { json: options.json })
     }
   })
 

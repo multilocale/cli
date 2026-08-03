@@ -2,6 +2,11 @@
 const fs = require('fs-extra')
 const path = require('node:path')
 const commander = require('commander')
+const {
+  withJson,
+  printJson,
+  fail,
+} = require('@monorepool/agentfirst/output.js')
 const addPhrasesModule = require('@multilocale/client/addPhrases.js')
 const getPhrasesModule = require('@multilocale/client/getPhrases.js')
 const translateToAllLanguagesModule = require('@multilocale/client/translateToAllLanguages.js')
@@ -16,13 +21,11 @@ const translateToAllLanguages =
 const updateProject = updateProjectModule.default || updateProjectModule
 const uuid = uuidModule.default || uuidModule
 const languages = languagesModule.default || languagesModule
-const rehydrateSession = require('./session/rehydrateSession.js')
-const isLoggedInSession = require('./session/isLoggedInSession.js')
+const ensureAuth = require('./ensureAuth.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
 const getProject = require('./getProject.js')
-const login = require('./login.js')
 
 // Phrases per POST to /api/phrases. Sized well under the api's body limit —
 // one project's full widening is tens of thousands of rows and a single write
@@ -31,7 +34,7 @@ const ADD_PHRASES_CHUNK = 500
 const GET_PHRASES_LOCALE_BATCH = 8
 const UNTRANSLATED_TECHNICAL_LABEL = /^(?:PC\d+|HIRAGANA|KATAKANA)\b/
 
-async function getPhrasesByLocales({ project, locales }) {
+async function getPhrasesByLocales({ project, locales, log = console.log }) {
   const phrases = []
 
   for (
@@ -57,7 +60,7 @@ async function getPhrasesByLocales({ project, locales }) {
     )
 
     phrases.push(...batchPhrases.flat())
-    console.log(
+    log(
       `Read ${Math.min(index + localeBatch.length, locales.length)}/${locales.length} locales`,
     )
   }
@@ -80,19 +83,19 @@ function addLocaleCommand() {
     '<locales>',
     'comma-separated locales or "all" to add and translate',
   )
+  withJson(command)
   command.action(async (localesArg, options) => {
+    // Progress goes to stderr in json mode so stdout stays parseable.
+    const print = options.json ? console.error : console.log
+
     try {
-      console.log('localize')
+      print('localize')
 
       if (!localesArg) {
         throw new Error(`argument locales '${localesArg}' is not valid`)
       }
 
-      rehydrateSession()
-
-      if (!isLoggedInSession()) {
-        await login()
-      }
+      await ensureAuth()
 
       let project = await getProject(options)
       const defaultLocale = project.defaultLocale || 'en'
@@ -122,23 +125,23 @@ function addLocaleCommand() {
       const alreadyPresent = localesToAdd.filter(l => project.locales.includes(l))
 
       if (alreadyPresent.length > 0) {
-        console.log(
+        print(
           `Already on the project: ${alreadyPresent.length} locales — will still reconcile their phrases`,
         )
       }
 
       if (localesNew.length > 0) {
-        console.log(`Locales to add: ${localesNew.join(', ')}`)
+        print(`Locales to add: ${localesNew.join(', ')}`)
       }
 
       localesToAdd = localesRequested
 
       if (isAndroid()) {
-        console.log('Android project detected')
+        print('Android project detected')
 
         throw new Error('Not implemented yet')
       } else if (isJavascript()) {
-        console.log('Javascript project detected')
+        print('Javascript project detected')
 
         // localesNew, not localesToAdd — the latter is now the full requested
         // set and would re-add locales the project already lists.
@@ -154,7 +157,7 @@ function addLocaleCommand() {
           locales: updatedLocales,
         })
 
-        console.log(
+        print(
           `Project ${project.name || project._id} now lists ${updatedLocales.length} locales (${localesNew.length} added)`,
         )
 
@@ -169,7 +172,7 @@ function addLocaleCommand() {
               const matchingFiles = files.filter(file => file.endsWith(suffix))
 
               if (matchingFiles.length === 0) {
-                console.log(
+                print(
                   `No matching files for path ${path_} and locale ${locale}`,
                 )
               } else {
@@ -180,18 +183,18 @@ function addLocaleCommand() {
                 if (matchingFiles.length === 1) {
                   locale2files[locale].push(matchingFiles[0])
                 } else if (matchingFiles.length > 1) {
-                  console.log(
+                  print(
                     `Found multiple matching files for path ${path_} and locale ${locale}:`,
                   )
                   matchingFiles.forEach(matchingFile => {
-                    console.log(`  ${matchingFile}`)
+                    print(`  ${matchingFile}`)
                     locale2files[locale].push(matchingFile)
                   })
                 }
               }
             })
           } else {
-            console.log(`Path ${path_} does not include %lang%`)
+            print(`Path ${path_} does not include %lang%`)
           }
         })
 
@@ -201,10 +204,10 @@ function addLocaleCommand() {
         const key2locale2phrase = {}
 
         if (filesFound.length > 0) {
-          console.log(
+          print(
             `Found ${filesFound.length} files in ${localesFound.length} locales:`,
           )
-          filesFound.forEach(fileFound => console.log(`  ${fileFound}`))
+          filesFound.forEach(fileFound => print(`  ${fileFound}`))
 
           for (let l = 0; l < localesFound.length; l += 1) {
             const locale = localesFound[l]
@@ -269,7 +272,7 @@ function addLocaleCommand() {
                 }
               })
 
-              console.log(`${language}: Found ${phrasesForLanguage} phrases`)
+              print(`${language}: Found ${phrasesForLanguage} phrases`)
             }
           }
         } else {
@@ -282,13 +285,14 @@ function addLocaleCommand() {
           // project's locale list, so the project ends up advertising locales
           // it has no phrases for. Read the existing phrases from the server
           // and translate those instead.
-          console.log(
+          print(
             'No local translation files matched — reading existing phrases from multilocale.com',
           )
 
           const phrases = await getPhrasesByLocales({
             project: project.name,
             locales: updatedLocales,
+            log: print,
           })
 
           phrases.forEach(phrase => {
@@ -298,7 +302,7 @@ function addLocaleCommand() {
             key2locale2phrase[phrase.key][phrase.language] = phrase
           })
 
-          console.log(
+          print(
             `Found ${phrases.length} phrase rows across ${Object.keys(key2locale2phrase).length} keys`,
           )
         }
@@ -339,12 +343,12 @@ function addLocaleCommand() {
             )
 
             if (localesMissing.length === 0) {
-              console.log(`Skipping key "${key}" — already complete`)
+              print(`Skipping key "${key}" — already complete`)
 
               continue // eslint-disable-line no-continue
             }
 
-            console.log(
+            print(
               `Translating key "${key}" to ${localesMissing.length} locales...`,
             )
 
@@ -360,7 +364,7 @@ function addLocaleCommand() {
             // silently dropped, and a re-run picks them up.
             let language2value
             if (UNTRANSLATED_TECHNICAL_LABEL.test(string)) {
-              console.log(
+              print(
                 `Keeping technical label "${string}" unchanged in every locale`,
               )
               language2value = Object.fromEntries(
@@ -384,7 +388,7 @@ function addLocaleCommand() {
                   const status = error?.cause?.status || error?.status || '?'
 
                   if (attempt > 5) {
-                    console.log(
+                    print(
                       `Giving up on key "${key}" after ${attempt} attempts (last status ${status}) — skipping`,
                     )
                     failedKeys.push(key)
@@ -393,7 +397,7 @@ function addLocaleCommand() {
 
                   const backoffMs = attempt * 5000
 
-                  console.log(
+                  print(
                     `  translate failed for "${key}" (status ${status}), retry ${attempt}/5 in ${backoffMs / 1000}s`,
                   )
                   await new Promise(resolve => {
@@ -430,7 +434,7 @@ function addLocaleCommand() {
                   : [project._id],
               }
 
-              console.log(
+              print(
                 `${localeToAdd}: translated key ${key} to ${translation}`,
               )
 
@@ -449,7 +453,7 @@ function addLocaleCommand() {
               const phrasesToSave = newPhrases.splice(0, newPhrases.length)
               await addPhrases(phrasesToSave)
               addedTotal += phrasesToSave.length
-              console.log(`  saved ${addedTotal} phrases so far`)
+              print(`  saved ${addedTotal} phrases so far`)
             }
           }
 
@@ -458,26 +462,39 @@ function addLocaleCommand() {
             await addPhrases(newPhrases.splice(0, newPhrases.length))
           }
 
-          console.log(
-            `Added ${addedTotal} phrases: https://app.multilocale.com/projects/${project._id}`,
-          )
+          if (options.json) {
+            printJson({
+              ok: failedKeys.length === 0,
+              project: project.name,
+              projectId: project._id,
+              locales: localesRequested,
+              added: addedTotal,
+              failedKeys,
+              url: `https://app.multilocale.com/projects/${project._id}`,
+            })
+          } else {
+            console.log(
+              `Added ${addedTotal} phrases: https://app.multilocale.com/projects/${project._id}`,
+            )
+          }
 
           // Never let a partial run read as a complete one. The command exits
-          // 0 either way, so this line is the only signal that the project is
+          // 0 either way, so this signal is the only one that the project is
           // still short — re-run it once the translate service recovers.
           if (failedKeys.length > 0) {
-            console.log(
+            print(
               `INCOMPLETE: ${failedKeys.length} key(s) could not be translated and were skipped: ${failedKeys.join(', ')}`,
             )
             process.exitCode = 1
           }
         }
       } else {
-        console.log('Could not detect project type')
+        throw new Error(
+          'Could not detect project type — run from the app root (Android needs an AndroidManifest.xml, JavaScript a package.json)',
+        )
       }
     } catch (error) {
-      console.error(error)
-      process.exitCode = 1
+      fail(error, { json: options.json })
     }
   })
 
