@@ -16,6 +16,7 @@ const _getAndroidResPath = require('./getAndroidResPath.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
+const getPaths = require('./getPaths.js')
 const getProject = require('./getProject.js')
 
 function convertXmlStringToJson(xml) {
@@ -113,7 +114,8 @@ function importCommand() {
         print('Javascript project detected')
 
         const files = getFiles()
-        const { locales, paths } = project
+        const { locales } = project
+        const paths = getPaths({ project })
         print({ locales, paths })
 
         const locale2files = {}
@@ -294,7 +296,8 @@ function importCommand() {
           }
 
           const phrases = Object.keys(key2locale2phrase).reduce(
-            (phrases, key) => phrases.concat(Object.values(key2locale2phrase[key])),
+            (phrases, key) =>
+              phrases.concat(Object.values(key2locale2phrase[key])),
             [],
           )
 

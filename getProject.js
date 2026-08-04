@@ -1,5 +1,6 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
 const inquirer = require('inquirer')
+const isInteractive = require('@monorepool/agentfirst/isInteractive.js')
 const getProjectModule = require('@multilocale/client/getProject.js')
 const getProjectsModule = require('@multilocale/client/getProjects.js')
 
@@ -35,6 +36,26 @@ module.exports = async function getProject(options) {
           value: project._id,
         }))
         .sort((a, b) => a.name.localeCompare(b.name))
+
+      // Without a TTY nobody will ever answer this, and inquirer waits
+      // forever — the command looks hung rather than failed, which is the
+      // worst outcome for CI and for an agent. Two projects is the normal
+      // state right after `signup` + `projects create`, so this was easy to
+      // hit on a brand-new account.
+      if (!isInteractive()) {
+        // Only a sample of the names: this account can hold hundreds, and a
+        // wall of them buries the one line that says what to do.
+        const names = choices.map(choice => choice.name || choice.value)
+        const sample = names.slice(0, 10).join(', ')
+        const rest = names.length > 10 ? `, … (${names.length - 10} more)` : ''
+
+        throw new Error(
+          `This account has ${projects.length} projects and none was selected. ` +
+            'Pass --project <idOrName>, or add a multilocale.json with a ' +
+            '"projectId". Run `multilocale projects list` for the full list.\n' +
+            `Projects: ${sample}${rest}`,
+        )
+      }
 
       const answers = await inquirer.prompt([
         {

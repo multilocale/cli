@@ -13,10 +13,10 @@ const getPhrasesModule = require('@multilocale/client/getPhrases.js')
 const getPhrases = getPhrasesModule.default || getPhrasesModule
 const ensureAuth = require('./ensureAuth.js')
 const getAndroidResPath = require('./getAndroidResPath.js')
-const getConfig = require('./getConfig.js')
 const getExtension = require('./getExtension.js')
 const getFormat = require('./getFormat.js')
 const getHeader = require('./getHeader.js')
+const getPaths = require('./getPaths.js')
 const getProject = require('./getProject.js')
 const getPostScript = require('./getPostScript.js')
 const isAndroid = require('./isAndroid.js')
@@ -134,15 +134,13 @@ function downloadCommand() {
           const keys = Object.keys(key2value)
           const stringsXml =
             '<?xml version="1.0" encoding="utf-8"?>\n' +
-            `<resources>\n${
-            keys.reduce((string, key) => {
+            `<resources>\n${keys.reduce((string, key) => {
               const value = key2value[key] || ''
 
               string += `<string name="${key}">${escapeAndroidStringValue(value)}</string>\n`
 
               return string
-            }, '')
-            }</resources>\n`
+            }, '')}</resources>\n`
 
           const folderPath =
             language === 'en'
@@ -158,9 +156,7 @@ function downloadCommand() {
 
           fs.writeFileSync(stringsXmlPath, stringXmlPretty)
           writtenFiles.push(stringsXmlPath.replace(path.resolve('.'), ''))
-          print(
-            `${language}: ${stringsXmlPath.replace(path.resolve('.'), '')}`,
-          )
+          print(`${language}: ${stringsXmlPath.replace(path.resolve('.'), '')}`)
         }
 
         if (options.json) {
@@ -186,16 +182,7 @@ function downloadCommand() {
         )
 
         const { locales } = project
-        const config = getConfig()
-        let paths = project.paths || config?.paths
-
-        if (!paths) {
-          if (format === 'swift') {
-            paths = [`%lang%.lproj/Localizable.${extension}`]
-          } else {
-            paths = [`translations/%lang%.${extension}`]
-          }
-        }
+        const paths = getPaths({ project, format, extension })
 
         paths.forEach(path_ => {
           if (path_.includes('%lang%')) {
@@ -203,7 +190,15 @@ function downloadCommand() {
               const phrasesDictionaryPath = path.resolve(
                 path_.replace('%lang%', language),
               )
-              const key2value = sortObject(language2key2value[language])
+              // `?? {}` because a configured locale with no phrases yet has no
+              // entry here at all, and sortObject would throw `Cannot convert
+              // undefined or null to object` — taking the whole download down
+              // rather than the one empty locale. A project with 96 locales and
+              // phrases in `en` only is the normal state right after
+              // `projects create`, so this was the common case, not the edge.
+              // Writing the empty dictionary is right: the file's absence is
+              // what the runtime would fail on.
+              const key2value = sortObject(language2key2value[language] ?? {})
 
               fs.mkdirSync(path.dirname(phrasesDictionaryPath), {
                 recursive: true,

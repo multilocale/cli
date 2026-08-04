@@ -11,6 +11,7 @@ const ensureAuth = require('./ensureAuth.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
+const getPaths = require('./getPaths.js')
 const getProject = require('./getProject.js')
 
 function unusedCommand() {
@@ -38,7 +39,8 @@ function unusedCommand() {
         print('Javascript project detected')
 
         let files = getFiles()
-        const { locales, paths } = project
+        const { locales } = project
+        const paths = getPaths({ project })
         print({ locales, paths })
 
         const locale2files = {}
