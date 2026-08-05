@@ -109,11 +109,37 @@ multilocale projects list                    # list projects with their ids
 multilocale projects get [projectIdOrName]   # raw JSON; all projects when omitted
 multilocale projects read <projectIdOrName>  # formatted single-project view
 multilocale projects create <name> --locales en,es,fr --default-locale en
+multilocale projects update <projectIdOrName> --paths "messages/%lang%.json"
 ```
 
 Project names are unique per organization, so commands accept a project by id
 or by name interchangeably. `projects create` always includes the default
 locale in the locale list.
+
+`projects update` is the only way to set a project's `paths`, which `import`
+and `unused` read off the **project** rather than off `multilocale.json` — and
+a project's `paths` win over the local file, so wrong ones there silently
+override local configuration. The same command repairs the nameless projects
+older signups created, in one call:
+
+```bash
+multilocale projects update <projectId> \
+  --name my-app --default-locale en --locales en,es --paths "translations/%lang%.json"
+```
+
+Locale handling is deliberately additive, because on the wire `locales` is a
+complete replacement list and a careless update would drop every locale it did
+not mention:
+
+| Flag               | Effect                                                  |
+| ------------------ | ------------------------------------------------------- |
+| `--locales`        | adds; locales already on the project are kept           |
+| `--remove-locales` | removes; the default locale cannot be removed           |
+| `--set-locales`    | replaces the list outright — every other locale is lost |
+
+The default locale is always kept in the list. `--paths` (on both `create` and
+`update`) takes a comma-separated list, repeated flags, or several values in a
+row.
 
 ### Phrases
 
@@ -186,6 +212,13 @@ Android `strings.xml` files or the JSON dictionaries matching the project's
 paths, uploads them as phrases, and machine-translates keys missing from some
 configured locales. Import once per codebase — re-importing creates duplicate
 rows rather than merging.
+
+Phrases are flat key/value pairs, so nested and namespaced dictionaries are
+flattened into dot paths on import — `{"checkout":{"failed":"…"}}` becomes the
+key `checkout.failed`. A literal dot inside a key is escaped (`checkout\.failed`)
+so it cannot be confused with the separator. Values that cannot be a phrase —
+arrays, `null`, empty objects — are reported and skipped rather than uploaded.
+Pass `--no-flatten` to refuse a nested file instead of flattening it.
 
 ### Audits
 

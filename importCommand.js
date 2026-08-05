@@ -23,12 +23,15 @@ const addPhrases = addPhrasesModule.default || addPhrasesModule
 const translateString = translateStringModule.default || translateStringModule
 const uuid = uuidModule.default || uuidModule
 const ensureAuth = require('./ensureAuth.js')
+const flattenTranslations = require('./flattenTranslations.js')
 const _getAndroidResPath = require('./getAndroidResPath.js')
 const isAndroid = require('./isAndroid.js')
 const isJavascript = require('./isJavascript.js')
 const getFiles = require('./getFiles.js')
 const getPaths = require('./getPaths.js')
 const getProject = require('./getProject.js')
+
+const { isPlainObject } = flattenTranslations
 
 function convertXmlStringToJson(xml) {
   return new Promise((resolve, reject) => {
@@ -46,6 +49,10 @@ function importCommand() {
   const command = new commander.Command('import')
   command.description('import local translation files into multilocale.com')
   command.option('--project [project]', 'project id or name')
+  command.option(
+    '--no-flatten',
+    'refuse nested dictionaries instead of flattening them into dot paths',
+  )
   withJson(command)
   command.action(async options => {
     // Progress goes to stderr in json mode so stdout stays parseable.
@@ -205,7 +212,40 @@ function importCommand() {
                 )
               }
 
-              const keys = Object.keys(json)
+              if (!isPlainObject(json)) {
+                throw new Error(
+                  `${file} is not a JSON object — a translation file must be a dictionary of keys to strings`,
+                )
+              }
+
+              // A phrase is a flat key/value pair. Nested dictionaries used to
+              // be stored verbatim, so `{"checkout":{"failed":"…"}}` became a
+              // phrase whose value was an object, which the machine translator
+              // then billed credits to turn into garbage. Flatten to dot paths
+              // first; nothing object-shaped may reach addPhrases.
+              const { nested, skipped, translations } =
+                flattenTranslations(json)
+
+              if (nested && options.flatten === false) {
+                throw new Error(
+                  `${file} is a nested dictionary and --no-flatten was passed. ` +
+                    'Multilocale phrases are flat key/value pairs — drop ' +
+                    '--no-flatten to store nested keys as dot paths ' +
+                    '(checkout.failed), or flatten the file yourself.',
+                )
+              }
+
+              if (nested) {
+                print(
+                  `${file}: nested dictionary flattened into dot paths (e.g. checkout.failed)`,
+                )
+              }
+
+              skipped.forEach(({ key, reason }) => {
+                print(`${file}: skipped key ${key} (${reason})`)
+              })
+
+              const keys = Object.keys(translations)
 
               const language = locale
               let phrasesForLanguage = 0
@@ -215,7 +255,7 @@ function importCommand() {
                   key2locale2phrase[key] = {}
                 }
 
-                let value = json[key]
+                let value = translations[key]
 
                 if (!value && language === defaultLocale) {
                   value = key
