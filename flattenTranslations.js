@@ -31,19 +31,44 @@ const escapeKeySegment = segment =>
 //   skipped      — [{ key, reason }] for leaves that cannot become a phrase
 //   nested       — whether the dictionary had any nesting at all, so the
 //                  caller can say so once instead of per key
+// Does any value nest? Decided for the WHOLE dictionary before a single key is
+// built, because whether a key needs escaping is a property of the file, not of
+// the key — see the comment in flattenTranslations.
+function hasNesting(value, depth = 0) {
+  if (!isPlainObject(value) || Object.keys(value).length === 0) {
+    return false
+  }
+
+  if (depth > 0) {
+    return true
+  }
+
+  return Object.values(value).some(child => hasNesting(child, depth + 1))
+}
+
 function flattenTranslations(dictionary) {
   const translations = {}
   const skipped = []
-  let nested = false
+
+  // Escape segments only when this dictionary actually nests.
+  //
+  // 1.3.0 escaped unconditionally and corrupted the ordinary case: an
+  // already-flat catalogue keyed `home.title` — how most i18n catalogues are
+  // written — was uploaded as `home\.title`, with `nested: false` so nothing
+  // warned. Three example projects hit it; two needed direct API repairs
+  // because no CLI command renames a phrase, and one still carries a
+  // post-script that unescapes on the way back out.
+  //
+  // The escape exists so `{a: {b: 1}}` and `{"a.b": 1}` stay distinct once both
+  // are dot paths, and so `unflattenTranslations` splits at the right dots. Both
+  // needs only arise once something nests. In a flat file the dots are part of
+  // the key, there is nothing to split, and rewriting them is pure damage.
+  const nested = hasNesting(dictionary)
 
   const visit = (value, path) => {
     if (isPlainObject(value) && Object.keys(value).length > 0) {
-      if (path.length > 0) {
-        nested = true
-      }
-
       Object.entries(value).forEach(([key, child]) => {
-        visit(child, [...path, escapeKeySegment(key)])
+        visit(child, [...path, key])
       })
 
       return
@@ -53,7 +78,7 @@ function flattenTranslations(dictionary) {
       return
     }
 
-    const key = path.join('.')
+    const key = nested ? path.map(escapeKeySegment).join('.') : path.join('.')
 
     if (typeof value === 'string') {
       translations[key] = value

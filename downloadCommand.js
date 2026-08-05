@@ -16,16 +16,34 @@ const getAndroidResPath = require('./getAndroidResPath.js')
 const getExtension = require('./getExtension.js')
 const getFormat = require('./getFormat.js')
 const getHeader = require('./getHeader.js')
+const getNested = require('./getNested.js')
 const getPaths = require('./getPaths.js')
 const getProject = require('./getProject.js')
 const getPostScript = require('./getPostScript.js')
 const isAndroid = require('./isAndroid.js')
+const unflattenTranslations = require('./unflattenTranslations.js')
 
 function sortObject(o) {
   return Object.keys(o)
     .sort()
     .reduce((r, k) => {
       r[k] = o[k]
+      return r
+    }, {})
+}
+
+// Sorting a nested dictionary has to recurse: sorting only the flat dot-path
+// keys gets the top level almost right and every deeper level wrong, and a
+// dictionary whose key order changes between runs makes every download a diff.
+function sortObjectDeep(o) {
+  return Object.keys(o)
+    .sort()
+    .reduce((r, k) => {
+      const value = o[k]
+      r[k] =
+        value !== null && typeof value === 'object' && !Array.isArray(value)
+          ? sortObjectDeep(value)
+          : value
       return r
     }, {})
 }
@@ -66,6 +84,14 @@ function downloadCommand() {
   command.option('--format [format]', 'format of dictionary files')
   command.option('--extension [extension]', 'extension of dictionary files')
   command.option('--header [header]', 'header of dictionary files')
+  // Defining --nested before --no-nested keeps the option tri-state in
+  // commander: undefined when neither is passed, so multilocale.json still
+  // gets a say, instead of an implicit default overriding it.
+  command.option(
+    '--nested',
+    'write nested dictionaries, re-nesting dot-path keys (checkout.failed)',
+  )
+  command.option('--no-nested', 'write flat dot-path keys (default)')
   command.option(
     '--post-script [post-script]',
     'post-script to run after downloading dictionary files',
@@ -84,6 +110,7 @@ function downloadCommand() {
       let format = await getFormat(options)
       let extension = await getExtension(options)
       let header = await getHeader(options)
+      let nested = await getNested(options)
       let postScript = await getPostScript(options)
 
       // Every dictionary file written, as printed, for the json result.
@@ -92,6 +119,21 @@ function downloadCommand() {
       print(`Project: ${project.name} (${project._id})`)
       print(`Format: ${format}`)
       print(`Extension: ${extension}`)
+
+      // Nesting is a property of an object-shaped dictionary. Android string
+      // resources and Apple .strings are flat key/value files with nowhere to
+      // put a nested key, so the flag is reported as ignored rather than
+      // silently written into something the platform cannot parse.
+      if (nested && (isAndroid() || format === 'swift')) {
+        print(
+          `Nested: ignored, ${
+            isAndroid() ? 'Android string resources are' : 'the swift format is'
+          } a flat key/value file`,
+        )
+        nested = false
+      } else if (nested) {
+        print('Nested: true')
+      }
 
       if (header) {
         print(
@@ -164,6 +206,7 @@ function downloadCommand() {
             ok: true,
             project: project.name,
             format: 'android',
+            nested,
             files: writtenFiles,
           })
         }
@@ -200,6 +243,22 @@ function downloadCommand() {
               // what the runtime would fail on.
               const key2value = sortObject(language2key2value[language] ?? {})
 
+              // Flat is what a phrase set is; nesting is a rendering of it, so
+              // it happens here, on the way out, and only when asked for.
+              // `dictionary` is the flat map itself unless --nested/"nested"
+              // says otherwise, which keeps the default output byte-identical.
+              let dictionary = key2value
+
+              if (nested) {
+                const unflattened = unflattenTranslations(key2value)
+
+                unflattened.conflicts.forEach(({ key, reason }) => {
+                  print(`  ${language}: kept ${key} flat — ${reason}`)
+                })
+
+                dictionary = sortObjectDeep(unflattened.translations)
+              }
+
               fs.mkdirSync(path.dirname(phrasesDictionaryPath), {
                 recursive: true,
               })
@@ -211,13 +270,13 @@ function downloadCommand() {
               }
 
               if (format === 'json') {
-                dictionaryFileContent += JSON.stringify(key2value, null, 2)
+                dictionaryFileContent += JSON.stringify(dictionary, null, 2)
               } else if (format === 'esm') {
-                dictionaryFileContent += `export default ${JSON.stringify(key2value, null, 2)}`
+                dictionaryFileContent += `export default ${JSON.stringify(dictionary, null, 2)}`
               } else if (format === 'js') {
-                dictionaryFileContent += `module.exports = ${JSON.stringify(key2value, null, 2)}`
+                dictionaryFileContent += `module.exports = ${JSON.stringify(dictionary, null, 2)}`
               } else if (format === 'cjs') {
-                dictionaryFileContent += `module.exports = ${JSON.stringify(key2value, null, 2)}`
+                dictionaryFileContent += `module.exports = ${JSON.stringify(dictionary, null, 2)}`
               } else if (format === 'swift') {
                 const keys = Object.keys(key2value).filter(k => k !== 'locale')
                 dictionaryFileContent += keys
@@ -264,6 +323,7 @@ function downloadCommand() {
             ok: true,
             project: project.name,
             format,
+            nested,
             files: writtenFiles,
           })
 

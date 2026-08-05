@@ -50,27 +50,49 @@ describe('flattenTranslations', () => {
     })
   })
 
-  it('escapes dots and backslashes inside key segments', () => {
+  // THE key property, and the one 1.3.0 got wrong. Most catalogues are already
+  // flat and keyed with dots — `home.title`, `footer.cta`. Those keys are not
+  // paths this function assembled; they are the key. Uploading them as
+  // `home\.title` corrupted three example projects, two of which needed direct
+  // API repairs because no CLI command can rename a phrase.
+  it('passes an already-flat dotted key through untouched', () => {
+    const { translations, nested } = flattenTranslations({
+      'home.title': 'Welcome',
+      'footer.built-with': 'Built with',
+      'back\\slash': 'Backslash',
+    })
+
+    expect(Object.keys(translations)).toEqual([
+      'home.title',
+      'footer.built-with',
+      'back\\slash',
+    ])
+    expect(nested).toBe(false)
+  })
+
+  // Escaping still applies where the key really is assembled from segments,
+  // so `unflattenTranslations` can split it back at the right dots.
+  it('escapes dots and backslashes inside assembled segments', () => {
     const { translations } = flattenTranslations({
       'checkout.failed': { label: 'Nested under a dotted key' },
-      'back\\slash': 'Backslash',
     })
 
     expect(translations).toEqual({
       'checkout\\.failed.label': 'Nested under a dotted key',
-      'back\\\\slash': 'Backslash',
     })
   })
 
-  it('does not collide a dotted flat key with a real nesting', () => {
+  // Accepted collapse, documented rather than defended against: a flat
+  // `checkout.failed` and a nested `{checkout: {failed}}` now produce the same
+  // key. They denote the same path in every i18n runtime we target, and the
+  // only way to keep them distinct was to mangle the flat one — which is the
+  // bug above. `download --nested` decides which shape is written back out.
+  it('treats a dotted flat key and the equivalent nesting as the same key', () => {
     const dotted = flattenTranslations({ 'checkout.failed': 'A' })
     const structured = flattenTranslations({ checkout: { failed: 'B' } })
 
-    expect(Object.keys(dotted.translations)).not.toEqual(
-      Object.keys(structured.translations),
-    )
-    expect(dotted.translations['checkout\\.failed']).toBe('A')
-    expect(structured.translations['checkout.failed']).toBe('B')
+    expect(Object.keys(dotted.translations)).toEqual(['checkout.failed'])
+    expect(Object.keys(structured.translations)).toEqual(['checkout.failed'])
   })
 
   it('coerces numbers and booleans, which JSON dictionaries do carry', () => {

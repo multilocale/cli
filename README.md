@@ -185,6 +185,7 @@ missing.
 ```bash
 multilocale download             # write dictionary files into the working tree
 multilocale download --format esm --extension js
+multilocale download --nested    # write nested JSON instead of flat dot paths
 multilocale download --header "/* generated */" --post-script "prettier --write translations/"
 multilocale import               # upload existing local translation files
 ```
@@ -219,6 +220,35 @@ key `checkout.failed`. A literal dot inside a key is escaped (`checkout\.failed`
 so it cannot be confused with the separator. Values that cannot be a phrase —
 arrays, `null`, empty objects — are reported and skipped rather than uploaded.
 Pass `--no-flatten` to refuse a nested file instead of flattening it.
+
+#### Nested output
+
+`download` writes those dot-path keys back out flat, which is what a runtime
+like next-intl reads. If yours expects the nested shape instead — react-i18next
+namespaces, vue-i18n, Lingui nested ids — ask for it:
+
+```bash
+multilocale download --nested    # {"checkout": {"failed": "…"}}
+multilocale download --no-nested # flat dot paths (the default)
+```
+
+or set it once, for every locale and every run:
+
+```json
+{ "projectId": "…", "nested": true }
+```
+
+The flag wins over `multilocale.json`, and flat is the default. The shape is
+never inferred from the files already on disk: `download` creates those files,
+so a locale that has no file yet — every locale but one, right after
+`projects create` — would come out in a different shape from the rest.
+
+With `--nested` the round trip closes: `import` then `download` reproduces the
+dictionary you started from, escaped dots and all. Keys that cannot be nested
+because another key already occupies their path (`settings` next to
+`settings.title`) keep their flat key and are listed as they are written; no
+value is ever dropped. Android `strings.xml` and Swift `.strings` are flat
+file formats, so the flag is reported as ignored there.
 
 ### Audits
 
@@ -272,8 +302,9 @@ project:
 When it is missing, commands list your projects, ask which one to use, and
 write the file for next time. `--project <idOrName>` overrides it per
 invocation. The same file can also hold `download` defaults: `format`,
-`extension`, `header`, `postScript`, and `paths` (an array of file patterns
-containing `%lang%`).
+`extension`, `header`, `postScript`, `nested` (a boolean — see [nested
+output](#nested-output)), and `paths` (an array of file patterns containing
+`%lang%`).
 
 ## Usage with AI agents
 

@@ -180,6 +180,9 @@ function importCommand() {
           filesFound.forEach(fileFound => print(`  ${fileFound}`))
 
           const key2locale2phrase = {}
+          // Whether any file needed flattening, so the round trip can be
+          // pointed out once at the end rather than after every file.
+          let flattenedAnyFile = false
 
           for (let l = 0; l < localesFound.length; l += 1) {
             const locale = localesFound[l]
@@ -236,6 +239,7 @@ function importCommand() {
               }
 
               if (nested) {
+                flattenedAnyFile = true
                 print(
                   `${file}: nested dictionary flattened into dot paths (e.g. checkout.failed)`,
                 )
@@ -283,6 +287,16 @@ function importCommand() {
 
               print(`${language}: Found ${phrasesForLanguage} phrases`)
             }
+          }
+
+          // Phrases are flat, so a nested catalogue only round-trips if
+          // `download` is told to re-nest it. Saying so here is the only place
+          // the user is known to have nested files; discovering it later means
+          // discovering it as a diff that rewrites every translation file.
+          if (flattenedAnyFile) {
+            print(
+              'These files are nested: add "nested": true to multilocale.json (or pass --nested to download) to get them back in the same shape.',
+            )
           }
 
           const keys = Object.keys(key2locale2phrase)
