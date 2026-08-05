@@ -11,6 +11,10 @@ const getProjects = require('@multilocale/client/getProjects.js').default
 const getProject = require('@multilocale/client/getProject.js').default
 const addProject = require('@multilocale/client/addProject.js').default
 const updateProject = require('@multilocale/client/updateProject.js').default
+const deleteProject = require('@multilocale/client/deleteProject.js').default
+const getPhrases = require('@multilocale/client/getPhrases.js').default
+const isInteractive = require('@monorepool/agentfirst/isInteractive.js')
+const inquirer = require('inquirer')
 const buildProjectUpdate = require('./buildProjectUpdate.js')
 
 // One parser for every list-shaped option, so `--paths a,b`, `--paths a b` and
@@ -326,6 +330,73 @@ function projectsCommand() {
         fail(error, { json: options.json })
       }
     })
+
+  // multilocale projects delete <projectIdOrName>
+  withJson(
+    command
+      .command('delete <projectIdOrName>')
+      .description(
+        'delete a project. Phrases only this project holds are deleted with ' +
+          'it; phrases shared with another project are detached, not deleted',
+      )
+      .option('--yes', 'skip the confirmation prompt'),
+  ).action(async (projectIdOrName, options) => {
+    const print = options.json ? console.error : console.log
+
+    try {
+      await ensureAuth()
+
+      const project = await getProject(projectIdOrName)
+
+      if (!project) {
+        throw new Error(`Project ${projectIdOrName} not found`)
+      }
+
+      // Deleting a project is not recoverable and the blast radius depends on
+      // data the user cannot see from here, so show the count before asking.
+      // Non-interactive callers must pass --yes rather than have the prompt
+      // silently skipped: an agent or CI run that never sees the question must
+      // not delete a project by omission.
+      const phrases = await getPhrases({ project: project.name })
+      const keys = new Set((phrases || []).map(phrase => phrase.key))
+
+      print(`Project: ${project.name} (${project._id})`)
+      print(`Phrases: ${phrases?.length ?? 0} rows across ${keys.size} keys`)
+
+      if (!options.yes) {
+        if (!isInteractive()) {
+          throw new Error(
+            'Refusing to delete without confirmation. Re-run with --yes.',
+          )
+        }
+
+        const answers = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'confirmation',
+            message: `Type the project name to delete it (${project.name}):`,
+          },
+        ])
+
+        if (answers.confirmation !== project.name) {
+          throw new Error('Name did not match. Nothing was deleted.')
+        }
+      }
+
+      const result = await deleteProject(project._id)
+
+      if (options.json) {
+        printJson({ ok: true, ...result })
+        return
+      }
+
+      console.log(
+        `Deleted project ${project.name}: ${result?.deletedPhrases ?? 0} phrases deleted, ${result?.detachedPhrases ?? 0} detached`,
+      )
+    } catch (error) {
+      fail(error, { json: options.json })
+    }
+  })
 
   return command
 }
