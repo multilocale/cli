@@ -1,7 +1,7 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getFiles = require('./getFiles.js')
+import getFiles from './getFiles.js'
 
-module.exports = function getConfigPath() {
+export default function getConfigPath() {
   let configPath
   let files = getFiles()
   files = files.filter(file => !file.includes('/build/'))

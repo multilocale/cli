@@ -1,7 +1,10 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const agentfirstSignupCommand = require('@monorepool/agentfirst/signupCommand.js')
-const { BINARY_NAME, getApiUrl, getAppUrl } = require('./cliConfig.js')
-const session = require('./sessionStore.js')
+import agentfirstSignupCommand from '@monorepool/agentfirst/signupCommand.js'
+
+import __module1 from './cliConfig.js'
+import session from './sessionStore.js'
+
+const { BINARY_NAME, getApiUrl, getAppUrl } = __module1
 
 // The step that used to need a person. `login` assumes the account exists;
 // an agent pointed at multilocale.com for the first time has no account to
@@ -21,4 +24,4 @@ function signupCommand() {
   })
 }
 
-module.exports = signupCommand
+export default signupCommand

@@ -1,19 +1,17 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
-const getProjectModule = require('@multilocale/client/getProject.js')
-const updatePhraseModule = require('@multilocale/client/updatePhrase.js')
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import getProjectModule from '@multilocale/client/getProject.js'
+import updatePhraseModule from '@multilocale/client/updatePhrase.js'
+import commander from 'commander'
+
+import ensureAuth from './ensureAuth.js'
+import getProject from './getProject.js'
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
 const getProjectByIdOrName = getProjectModule.default || getProjectModule
 const updatePhrase = updatePhraseModule.default || updatePhraseModule
-const ensureAuth = require('./ensureAuth.js')
-const getProject = require('./getProject.js')
 
 function shareCommand() {
   const command = new commander.Command('share')
@@ -162,4 +160,4 @@ function shareCommand() {
   return command
 }
 
-module.exports = shareCommand
+export default shareCommand

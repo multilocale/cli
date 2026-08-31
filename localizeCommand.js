@@ -1,31 +1,34 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const fs = require('fs-extra')
-const path = require('node:path')
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const addPhrasesModule = require('@multilocale/client/addPhrases.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
-const translateToAllLanguagesModule = require('@multilocale/client/translateToAllLanguages.js')
-const updateProjectModule = require('@multilocale/client/updateProject.js')
-const uuidModule = require('@multilocale/client/uuid.js')
-const languagesModule = require('@monorepool/shared/languages.js')
+
+import path from 'node:path'
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import languagesModule from '@monorepool/shared/languages.js'
+import addPhrasesModule from '@multilocale/client/addPhrases.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import translateToAllLanguagesModule from '@multilocale/client/translateToAllLanguages.js'
+import translateToAllLanguagesLocalModule from '@multilocale/client/translateToAllLanguagesLocal.js'
+import updateProjectModule from '@multilocale/client/updateProject.js'
+import uuidModule from '@multilocale/client/uuid.js'
+import commander from 'commander'
+import fs from 'fs-extra'
+
+import ensureAuth from './ensureAuth.js'
+import getFiles from './getFiles.js'
+import getProject from './getProject.js'
+import isAndroid from './isAndroid.js'
+import isJavascript from './isJavascript.js'
 
 const addPhrases = addPhrasesModule.default || addPhrasesModule
 const getPhrases = getPhrasesModule.default || getPhrasesModule
 const translateToAllLanguages =
   translateToAllLanguagesModule.default || translateToAllLanguagesModule
+const translateToAllLanguagesLocal =
+  translateToAllLanguagesLocalModule.default ||
+  translateToAllLanguagesLocalModule
 const updateProject = updateProjectModule.default || updateProjectModule
 const uuid = uuidModule.default || uuidModule
 const languages = languagesModule.default || languagesModule
-const ensureAuth = require('./ensureAuth.js')
-const isAndroid = require('./isAndroid.js')
-const isJavascript = require('./isJavascript.js')
-const getFiles = require('./getFiles.js')
-const getProject = require('./getProject.js')
 
 // Phrases per POST to /api/phrases. Sized well under the api's body limit —
 // one project's full widening is tens of thousands of rows and a single write
@@ -42,10 +45,7 @@ async function getPhrasesByLocales({ project, locales, log = console.log }) {
     index < locales.length;
     index += GET_PHRASES_LOCALE_BATCH
   ) {
-    const localeBatch = locales.slice(
-      index,
-      index + GET_PHRASES_LOCALE_BATCH,
-    )
+    const localeBatch = locales.slice(index, index + GET_PHRASES_LOCALE_BATCH)
     // Fetching a whole app in one request can exceed the API response limit.
     // Locale-sized requests keep the payloads bounded while a small parallel
     // batch avoids turning a reconciliation into 96 serial round trips.
@@ -76,8 +76,8 @@ function addLocaleCommand() {
   command.option('--project [project]', 'project id or name')
   command.option(
     '-m, --model <model>',
-    'translation model: "gpt-5-nano" (default), "gpt-5-mini", "gemini-3.5-flash", or "claude-haiku-4-5"',
-    'gpt-5-nano',
+    'translation model (uses local LLM if available: claude, codex; fallback to API: gpt-5.6-luna, gpt-5-mini, gemini-3.5-flash, claude-haiku-4-5)',
+    'gpt-5.6-luna',
   )
   command.argument(
     '<locales>',
@@ -122,7 +122,9 @@ function addLocaleCommand() {
       // cheap and idempotent.
       const localesRequested = [...localesToAdd]
       const localesNew = localesToAdd.filter(l => !project.locales.includes(l))
-      const alreadyPresent = localesToAdd.filter(l => project.locales.includes(l))
+      const alreadyPresent = localesToAdd.filter(l =>
+        project.locales.includes(l),
+      )
 
       if (alreadyPresent.length > 0) {
         print(
@@ -363,6 +365,8 @@ function addLocaleCommand() {
             // other 200. Skipped keys are reported at the end rather than
             // silently dropped, and a re-run picks them up.
             let language2value
+            let usedLocalLlm = false
+            let translationModel = options.model
             if (UNTRANSLATED_TECHNICAL_LABEL.test(string)) {
               print(
                 `Keeping technical label "${string}" unchanged in every locale`,
@@ -375,6 +379,26 @@ function addLocaleCommand() {
 
               for (;;) {
                 try {
+                  if (attempt === 0) {
+                    try {
+                      const localResult = await translateToAllLanguagesLocal({
+                        value: string,
+                        languages: localesMissing,
+                        from,
+                      })
+                      language2value = localResult.language2value
+                      usedLocalLlm = true
+                      translationModel = localResult.model
+                      print(`  using local ${translationModel}`)
+                      break
+                    } catch (localError) {
+                      print(
+                        `  local translation unavailable: ${localError.message}`,
+                      )
+                      print(`  falling back to multilocale API...`)
+                    }
+                  }
+
                   language2value = await translateToAllLanguages({
                     value: string,
                     languages: localesMissing,
@@ -405,6 +429,12 @@ function addLocaleCommand() {
                   })
                 }
               }
+
+              if (language2value) {
+                translationModel = usedLocalLlm
+                  ? translationModel
+                  : options.model
+              }
             }
 
             if (!language2value) {
@@ -420,9 +450,9 @@ function addLocaleCommand() {
                 language: localeToAdd,
                 creationTime: new Date().toISOString(),
                 lastEditTime: new Date().toISOString(),
-                googleTranslate: true,
+                googleTranslate: !usedLocalLlm,
                 machineTranslated: true,
-                model: options.model,
+                model: translationModel,
                 context: null,
                 organizationId:
                   phraseFrom.organizationId || project.organizationId,
@@ -434,9 +464,7 @@ function addLocaleCommand() {
                   : [project._id],
               }
 
-              print(
-                `${localeToAdd}: translated key ${key} to ${translation}`,
-              )
+              print(`${localeToAdd}: translated key ${key} to ${translation}`)
 
               newPhrases.push(phraseTo)
             })
@@ -501,4 +529,4 @@ function addLocaleCommand() {
   return command
 }
 
-module.exports = addLocaleCommand
+export default addLocaleCommand

@@ -1,7 +1,7 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getConfig = require('./getConfig.js')
+import getConfig from './getConfig.js'
 
-module.exports = async function getHeader(options) {
+export default async function getHeader(options) {
   let header = options?.header
   const config = getConfig()
 

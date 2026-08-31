@@ -1,7 +1,10 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const agentfirstLogoutCommand = require('@monorepool/agentfirst/logoutCommand.js')
-const { BINARY_NAME, ENV_KEY_NAME } = require('./cliConfig.js')
-const session = require('./sessionStore.js')
+import agentfirstLogoutCommand from '@monorepool/agentfirst/logoutCommand.js'
+
+import __module1 from './cliConfig.js'
+import session from './sessionStore.js'
+
+const { BINARY_NAME, ENV_KEY_NAME } = __module1
 
 function logoutCommand() {
   return agentfirstLogoutCommand({
@@ -11,4 +14,4 @@ function logoutCommand() {
   })
 }
 
-module.exports = logoutCommand
+export default logoutCommand

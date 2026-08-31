@@ -1,20 +1,22 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const resolveCredential = require('@monorepool/agentfirst/resolveCredential.js')
-const { loginInstructions } = require('@monorepool/agentfirst/loginHint.js')
-const {
-  setAccessTokenForMultilocaleClient,
+
+import { loginInstructions } from '@monorepool/agentfirst/loginHint.js'
+import resolveCredential from '@monorepool/agentfirst/resolveCredential.js'
+import {
   setAccessTokenCallbackForMultilocaleClient,
-} = require('@multilocale/client/accessToken.js')
-const {
-  setRefreshTokenForMultilocaleClient,
+  setAccessTokenForMultilocaleClient,
+} from '@multilocale/client/accessToken.js'
+import { setApiKeyForMultilocaleClient } from '@multilocale/client/apiKey.js'
+import {
   isRefreshTokenExpired,
-} = require('@multilocale/client/refreshToken.js')
-const {
-  setApiKeyForMultilocaleClient,
-} = require('@multilocale/client/apiKey.js')
-const { BINARY_NAME, ENV_KEY_NAME, getAppUrl } = require('./cliConfig.js')
-const session = require('./sessionStore.js')
-const login = require('./login.js')
+  setRefreshTokenForMultilocaleClient,
+} from '@multilocale/client/refreshToken.js'
+
+import __module1 from './cliConfig.js'
+import login from './login.js'
+import session from './sessionStore.js'
+
+const { BINARY_NAME, ENV_KEY_NAME, getAppUrl } = __module1
 
 function isInteractive() {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY)
@@ -38,7 +40,7 @@ function rehydrateClientSession() {
 // With nothing stored: on a TTY the historical auto browser login stays;
 // headless it throws immediately with instructions naming both ways in,
 // instead of opening a browser and blocking for five minutes.
-module.exports = async function ensureAuth() {
+export default async function ensureAuth() {
   let resolved = resolveCredential({ session, envKeyName: ENV_KEY_NAME })
 
   if (resolved.mode === 'token') {

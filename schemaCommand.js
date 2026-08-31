@@ -1,5 +1,5 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const agentfirstSchemaCommand = require('@monorepool/agentfirst/schemaCommand.js')
+import agentfirstSchemaCommand from '@monorepool/agentfirst/schemaCommand.js'
 
 // index.js passes the composed commander program so `multilocale schema`
 // describes the CLI exactly as it runs — root options, login, skills, and
@@ -10,4 +10,4 @@ function schemaCommand(program) {
   return agentfirstSchemaCommand({ program })
 }
 
-module.exports = schemaCommand
+export default schemaCommand

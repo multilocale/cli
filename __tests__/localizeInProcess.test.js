@@ -1,0 +1,298 @@
+/* Copyright 2013 - 2026 Waiterio LLC */
+
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+// eslint-disable-next-line import-js/no-extraneous-dependencies
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  addPhrases: vi.fn(),
+  ensureAuth: vi.fn(),
+  fail: vi.fn(),
+  files: [],
+  getPhrases: vi.fn(),
+  getProject: vi.fn(),
+  isAndroid: false,
+  isJavascript: true,
+  printJson: vi.fn(),
+  translateToAllLanguages: vi.fn(),
+  updateProject: vi.fn(),
+  uuid: vi.fn(),
+}))
+
+vi.mock('@monorepool/agentfirst/output.js', async importOriginal => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    fail: (...args) => mocks.fail(...args),
+    printJson: (...args) => mocks.printJson(...args),
+  }
+})
+vi.mock('@monorepool/shared/languages.js', () => ({
+  default: { en: 'English', es: 'Spanish', fr: 'French' },
+}))
+vi.mock('@multilocale/client/addPhrases.js', () => ({
+  default: (...args) => mocks.addPhrases(...args),
+}))
+vi.mock('@multilocale/client/getPhrases.js', () => ({
+  default: (...args) => mocks.getPhrases(...args),
+}))
+vi.mock('@multilocale/client/translateToAllLanguages.js', () => ({
+  default: (...args) => mocks.translateToAllLanguages(...args),
+}))
+vi.mock('@multilocale/client/updateProject.js', () => ({
+  default: (...args) => mocks.updateProject(...args),
+}))
+vi.mock('@multilocale/client/uuid.js', () => ({
+  default: (...args) => mocks.uuid(...args),
+}))
+vi.mock('../ensureAuth.js', () => ({
+  default: (...args) => mocks.ensureAuth(...args),
+}))
+vi.mock('../getFiles.js', () => ({ default: () => mocks.files }))
+vi.mock('../getProject.js', () => ({
+  default: (...args) => mocks.getProject(...args),
+}))
+vi.mock('../isAndroid.js', () => ({ default: () => mocks.isAndroid }))
+vi.mock('../isJavascript.js', () => ({ default: () => mocks.isJavascript }))
+
+const localizeCommand = (await import('../localizeCommand.js')).default
+
+const baseProject = {
+  _id: 'project-1',
+  defaultLocale: 'en',
+  locales: ['en'],
+  name: 'website',
+  organizationId: 'organization-1',
+  paths: [],
+}
+
+const invoke = async (argv = []) => {
+  const command = localizeCommand()
+  await command.parseAsync(argv, { from: 'user' })
+}
+
+describe('localize workflow in process', () => {
+  const originalDirectory = process.cwd()
+  let directory
+
+  beforeAll(() => {
+    directory = fs.mkdtempSync(
+      path.join(os.tmpdir(), 'multilocale-localize-unit-'),
+    )
+    process.chdir(directory)
+  })
+
+  afterAll(() => {
+    process.chdir(originalDirectory)
+    fs.rmSync(directory, { force: true, recursive: true })
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fs.rmSync(path.join(directory, 'translations'), {
+      force: true,
+      recursive: true,
+    })
+    mocks.addPhrases.mockResolvedValue(undefined)
+    mocks.ensureAuth.mockResolvedValue({ mode: 'key' })
+    mocks.fail.mockImplementation(error => {
+      throw error
+    })
+    mocks.files = []
+    mocks.getPhrases.mockResolvedValue([])
+    mocks.getProject.mockResolvedValue({ ...baseProject })
+    mocks.isAndroid = false
+    mocks.isJavascript = true
+    mocks.translateToAllLanguages.mockImplementation(
+      async ({ languages, value }) =>
+        Object.fromEntries(
+          languages.map(locale => [locale, `${value} (${locale})`]),
+        ),
+    )
+    mocks.updateProject.mockImplementation(async value => value)
+    let uuid = 0
+    mocks.uuid.mockImplementation(() => {
+      uuid += 1
+      return `phrase-${uuid}`
+    })
+    process.exitCode = undefined
+  })
+
+  it('widens a server-backed project and translates only missing locale rows', async () => {
+    mocks.getPhrases.mockImplementation(async ({ language }) => {
+      if (language === 'en') {
+        return [
+          {
+            _id: 'greeting-en',
+            key: 'greeting',
+            language: 'en',
+            organizationId: 'organization-source',
+            projects: ['website', 'shared-library'],
+            projectsIds: ['project-1', 'shared-project'],
+            value: 'Hello',
+          },
+          {
+            _id: 'technical-en',
+            key: 'technical',
+            language: 'en',
+            value: 'PC123 - HIRAGANA',
+          },
+        ]
+      }
+      if (language === 'es') {
+        return [
+          {
+            _id: 'greeting-es',
+            key: 'greeting',
+            language: 'es',
+            value: 'Hola',
+          },
+        ]
+      }
+      return []
+    })
+
+    await invoke(['es, fr', '--model', 'gpt-5-mini', '--json'])
+
+    expect(mocks.updateProject).toHaveBeenCalledWith(
+      expect.objectContaining({ locales: ['en', 'es', 'fr'] }),
+    )
+    expect(mocks.getPhrases).toHaveBeenCalledTimes(3)
+    expect(mocks.translateToAllLanguages).toHaveBeenCalledWith({
+      from: 'en',
+      languages: ['fr'],
+      model: 'gpt-5-mini',
+      projectId: 'project-1',
+      value: 'Hello',
+    })
+    const saved = mocks.addPhrases.mock.calls[0][0]
+    expect(saved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'greeting',
+          language: 'fr',
+          organizationId: 'organization-source',
+          projects: ['website', 'shared-library'],
+          projectsIds: ['project-1', 'shared-project'],
+          value: 'Hello (fr)',
+        }),
+        expect.objectContaining({
+          key: 'technical',
+          language: 'es',
+          value: 'PC123 - HIRAGANA',
+        }),
+        expect.objectContaining({
+          key: 'technical',
+          language: 'fr',
+          value: 'PC123 - HIRAGANA',
+        }),
+      ]),
+    )
+    expect(mocks.printJson).toHaveBeenCalledWith(
+      expect.objectContaining({ added: 3, failedKeys: [], ok: true }),
+    )
+  })
+
+  it('reconciles an already-listed locale without adding it again', async () => {
+    const existing = { ...baseProject, locales: ['en', 'es'] }
+    mocks.getProject.mockResolvedValue(existing)
+    mocks.getPhrases.mockImplementation(async ({ language }) =>
+      language === 'en'
+        ? [{ key: 'greeting', language: 'en', value: 'Hello' }]
+        : [],
+    )
+
+    await invoke(['es', '--json'])
+
+    expect(mocks.updateProject).toHaveBeenCalledWith(existing)
+    expect(mocks.addPhrases).toHaveBeenCalledWith([
+      expect.objectContaining({ key: 'greeting', language: 'es' }),
+    ])
+  })
+
+  it('uses local translation files when project paths match', async () => {
+    const project = {
+      ...baseProject,
+      paths: ['translations/%lang%.json'],
+    }
+    mocks.getProject.mockResolvedValue(project)
+    fs.mkdirSync(path.join(directory, 'translations'), { recursive: true })
+    fs.writeFileSync(
+      path.join(directory, 'translations', 'en.json'),
+      JSON.stringify({ empty: '', greeting: 'Hello' }),
+    )
+    mocks.files = ['/translations/en.json']
+
+    await invoke(['es', '--json'])
+
+    expect(mocks.getPhrases).not.toHaveBeenCalled()
+    expect(mocks.addPhrases).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'empty',
+          language: 'es',
+          value: 'empty (es)',
+        }),
+        expect.objectContaining({ key: 'greeting', language: 'es' }),
+      ]),
+    )
+  })
+
+  it('supports all known locales and rejects Android or unknown roots', async () => {
+    await invoke(['all', '--json'])
+    expect(mocks.updateProject).toHaveBeenCalledWith(
+      expect.objectContaining({ locales: ['en', 'es', 'fr'] }),
+    )
+
+    mocks.isAndroid = true
+    await expect(invoke(['es'])).rejects.toThrow('Not implemented yet')
+
+    mocks.isAndroid = false
+    mocks.isJavascript = false
+    await expect(invoke(['es'])).rejects.toThrow(
+      'Could not detect project type',
+    )
+  })
+
+  it('retries transient translation failures and marks exhausted keys incomplete', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.getPhrases.mockImplementation(async ({ language }) =>
+        language === 'en'
+          ? [{ key: 'greeting', language: 'en', value: 'Hello' }]
+          : [],
+      )
+      mocks.translateToAllLanguages.mockRejectedValue(
+        Object.assign(new Error('unavailable'), { status: 503 }),
+      )
+      const invocation = invoke(['es', '--json'])
+      await vi.runAllTimersAsync()
+      await invocation
+
+      expect(mocks.translateToAllLanguages).toHaveBeenCalledTimes(6)
+      expect(mocks.addPhrases).not.toHaveBeenCalled()
+      expect(mocks.printJson).toHaveBeenCalledWith(
+        expect.objectContaining({
+          added: 0,
+          failedKeys: ['greeting'],
+          ok: false,
+        }),
+      )
+      expect(process.exitCode).toBe(1)
+    } finally {
+      process.exitCode = undefined
+      vi.useRealTimers()
+    }
+  })
+})

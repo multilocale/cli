@@ -1,6 +1,6 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const localStorage = require('./localStorage.js')
+import localStorage from './localStorage.js'
 
-module.exports = function setRefreshToken(refreshToken) {
+export default function setRefreshToken(refreshToken) {
   return localStorage.setItem('refreshToken', refreshToken)
 }

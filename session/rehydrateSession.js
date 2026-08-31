@@ -1,16 +1,15 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const {
-  setAccessTokenForMultilocaleClient,
+import {
   setAccessTokenCallbackForMultilocaleClient,
-} = require('@multilocale/client/accessToken.js')
-const {
-  setRefreshTokenForMultilocaleClient,
-} = require('@multilocale/client/refreshToken.js')
-const getAccessToken = require('./getAccessToken.js')
-const getRefreshToken = require('./getRefreshToken.js')
-const setAccessToken = require('./setAccessToken.js')
+  setAccessTokenForMultilocaleClient,
+} from '@multilocale/client/accessToken.js'
+import { setRefreshTokenForMultilocaleClient } from '@multilocale/client/refreshToken.js'
 
-module.exports = async function rehydrateSession() {
+import getAccessToken from './getAccessToken.js'
+import getRefreshToken from './getRefreshToken.js'
+import setAccessToken from './setAccessToken.js'
+
+export default async function rehydrateSession() {
   const accessToken = getAccessToken()
   const refreshToken = getRefreshToken()
 

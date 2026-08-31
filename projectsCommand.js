@@ -1,21 +1,19 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const { inspect } = require('node:util')
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const ensureAuth = require('./ensureAuth.js')
-const getProjects = require('@multilocale/client/getProjects.js').default
-const getProject = require('@multilocale/client/getProject.js').default
-const addProject = require('@multilocale/client/addProject.js').default
-const updateProject = require('@multilocale/client/updateProject.js').default
-const deleteProject = require('@multilocale/client/deleteProject.js').default
-const getPhrases = require('@multilocale/client/getPhrases.js').default
-const isInteractive = require('@monorepool/agentfirst/isInteractive.js')
-const inquirer = require('inquirer')
-const buildProjectUpdate = require('./buildProjectUpdate.js')
+import { inspect } from 'node:util'
+
+import isInteractive from '@monorepool/agentfirst/isInteractive.js'
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import addProject from '@multilocale/client/addProject.js'
+import deleteProject from '@multilocale/client/deleteProject.js'
+import getPhrases from '@multilocale/client/getPhrases.js'
+import getProject from '@multilocale/client/getProject.js'
+import getProjects from '@multilocale/client/getProjects.js'
+import updateProject from '@multilocale/client/updateProject.js'
+import commander from 'commander'
+import inquirer from 'inquirer'
+
+import buildProjectUpdate from './buildProjectUpdate.js'
+import ensureAuth from './ensureAuth.js'
 
 // One parser for every list-shaped option, so `--paths a,b`, `--paths a b` and
 // `--paths a --paths b` all mean the same thing. Commander calls this once per
@@ -401,4 +399,4 @@ function projectsCommand() {
   return command
 }
 
-module.exports = projectsCommand
+export default projectsCommand

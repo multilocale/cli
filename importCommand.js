@@ -1,37 +1,31 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const fs = require('fs-extra')
-const path = require('node:path')
-const commander = require('commander')
-const xml2js = require('xml2js')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const addPhrasesModule = require('@multilocale/client/addPhrases.js')
-const translateStringModule = require('@multilocale/client/translateString.js')
-const uuidModule = require('@multilocale/client/uuid.js')
 
-// `@multilocale/client` is ESM with default exports, so requiring it from this
-// CommonJS bundle yields the namespace object, not the function. Every other
-// command already unwraps it this way; importCommand called the namespace
-// directly and died with `uuid2 is not a function` the moment it reached the
-// first phrase — meaning `import`, the entry point for "I already have
-// translation files", never worked in a published build. It was masked until
-// now because it threw earlier, on `paths.forEach` (see getPaths.js).
+import path from 'node:path'
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import addPhrasesModule from '@multilocale/client/addPhrases.js'
+import translateStringModule from '@multilocale/client/translateString.js'
+import translateStringLocalModule from '@multilocale/client/translateStringLocal.js'
+import uuidModule from '@multilocale/client/uuid.js'
+import commander from 'commander'
+import fs from 'fs-extra'
+import xml2js from 'xml2js'
+
+import ensureAuth from './ensureAuth.js'
+import flattenTranslations, { isPlainObject } from './flattenTranslations.js'
+import getFiles from './getFiles.js'
+import getPaths from './getPaths.js'
+import getProject from './getProject.js'
+import isAndroid from './isAndroid.js'
+import isJavascript from './isJavascript.js'
+
+// These compatibility unwrappers accept both the clients' native ESM defaults
+// and namespace-shaped output from older generated client builds.
 const addPhrases = addPhrasesModule.default || addPhrasesModule
 const translateString = translateStringModule.default || translateStringModule
+const translateStringLocal =
+  translateStringLocalModule.default || translateStringLocalModule
 const uuid = uuidModule.default || uuidModule
-const ensureAuth = require('./ensureAuth.js')
-const flattenTranslations = require('./flattenTranslations.js')
-const _getAndroidResPath = require('./getAndroidResPath.js')
-const isAndroid = require('./isAndroid.js')
-const isJavascript = require('./isJavascript.js')
-const getFiles = require('./getFiles.js')
-const getPaths = require('./getPaths.js')
-const getProject = require('./getProject.js')
-
-const { isPlainObject } = flattenTranslations
 
 function convertXmlStringToJson(xml) {
   return new Promise((resolve, reject) => {
@@ -328,10 +322,23 @@ function importCommand() {
                   const string = phraseFrom.value
 
                   let translation
+                  let translationModel = 'unknown'
+                  let usedLocalLlm = false
 
                   try {
-                    const result = await translateString({ string, to, from })
-                    translation = result.translation
+                    try {
+                      const localResult = await translateStringLocal({
+                        string,
+                        to,
+                        from,
+                      })
+                      translation = localResult.value
+                      translationModel = localResult.model
+                      usedLocalLlm = true
+                    } catch (localError) {
+                      const result = await translateString({ string, to, from })
+                      translation = result.translation
+                    }
                   } catch (_error) {
                     throw new Error(
                       `Could not translate '${string}' from ${from} to ${to}`,
@@ -346,7 +353,9 @@ function importCommand() {
                     language: to,
                     creationTime: new Date().toISOString(),
                     lastEditTime: new Date().toISOString(),
-                    googleTranslate: true,
+                    googleTranslate: !usedLocalLlm,
+                    machineTranslated: true,
+                    model: translationModel,
                     organizationId: project.organizationId,
                     projects: [project.name],
                     projectsIds: [project._id],
@@ -405,4 +414,4 @@ function importCommand() {
   return command
 }
 
-module.exports = importCommand
+export default importCommand

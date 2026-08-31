@@ -1,16 +1,14 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const { inspect } = require('node:util')
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
+import { inspect } from 'node:util'
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import commander from 'commander'
+
+import ensureAuth from './ensureAuth.js'
+import getProject from './getProject.js'
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
-const ensureAuth = require('./ensureAuth.js')
-const getProject = require('./getProject.js')
 
 function phrasesCommand() {
   const command = new commander.Command('phrases')
@@ -62,7 +60,9 @@ function phrasesCommand() {
         }
 
         if (options.languages) {
-          console.log(`${languages.length} language(s): ${languages.join(', ')}`)
+          console.log(
+            `${languages.length} language(s): ${languages.join(', ')}`,
+          )
 
           return
         }
@@ -122,4 +122,4 @@ function phrasesCommand() {
   return command
 }
 
-module.exports = phrasesCommand
+export default phrasesCommand

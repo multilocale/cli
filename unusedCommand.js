@@ -1,18 +1,17 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const fs = require('fs-extra')
-const path = require('node:path')
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const ensureAuth = require('./ensureAuth.js')
-const isAndroid = require('./isAndroid.js')
-const isJavascript = require('./isJavascript.js')
-const getFiles = require('./getFiles.js')
-const getPaths = require('./getPaths.js')
-const getProject = require('./getProject.js')
+
+import path from 'node:path'
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import commander from 'commander'
+import fs from 'fs-extra'
+
+import ensureAuth from './ensureAuth.js'
+import getFiles from './getFiles.js'
+import getPaths from './getPaths.js'
+import getProject from './getProject.js'
+import isAndroid from './isAndroid.js'
+import isJavascript from './isJavascript.js'
 
 function unusedCommand() {
   const command = new commander.Command('unused')
@@ -188,4 +187,4 @@ function unusedCommand() {
   return command
 }
 
-module.exports = unusedCommand
+export default unusedCommand

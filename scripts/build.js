@@ -1,10 +1,23 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const esbuild = require('esbuild')
-const path = require('path')
-const fs = require('fs')
-const packageJson = require('../package.json')
 
-const distDir = path.resolve(__dirname, '../dist')
+import fs from 'fs'
+import { readFileSync as __readPackageJsonFileSync } from 'node:fs'
+import { fileURLToPath as __fileURLToPath } from 'node:url'
+import path from 'path'
+
+import esbuild from 'esbuild'
+
+const packageJson = JSON.parse(
+  __readPackageJsonFileSync(
+    new URL('../package.json', import.meta.url),
+    'utf8',
+  ),
+)
+
+const distDir = path.resolve(
+  __fileURLToPath(new URL('.', import.meta.url)),
+  '../dist',
+)
 
 // Clean dist directory
 if (fs.existsSync(distDir)) {
@@ -17,12 +30,17 @@ const external = Object.keys(packageJson.dependencies || {})
 
 esbuild
   .build({
-    entryPoints: [path.resolve(__dirname, '../index.js')],
+    entryPoints: [
+      path.resolve(
+        __fileURLToPath(new URL('.', import.meta.url)),
+        '../index.js',
+      ),
+    ],
     bundle: true,
     platform: 'node',
     target: 'node18',
     outfile: path.resolve(distDir, 'index.js'),
-    format: 'cjs',
+    format: 'esm',
     external,
     // Replace the monorepo URL resolver so the internal domain/port
     // registry never reaches the public bundle.
@@ -30,9 +48,15 @@ esbuild
       {
         name: 'cli-get-url',
         setup(pluginBuild) {
-          pluginBuild.onResolve({ filter: /^@monorepool\/env\/getUrl\.js$/ }, () => ({
-            path: path.resolve(__dirname, '../cliGetUrl.js'),
-          }))
+          pluginBuild.onResolve(
+            { filter: /^@monorepool\/env\/getUrl\.js$/ },
+            () => ({
+              path: path.resolve(
+                __fileURLToPath(new URL('.', import.meta.url)),
+                '../cliGetUrl.js',
+              ),
+            }),
+          )
         },
       },
     ],
@@ -51,9 +75,12 @@ esbuild
     // The canonical source only exists inside the waiterio monorepo — builds
     // from the public github.com/multilocale/cli mirror skip the copy and keep
     // whatever skills/ they already have.
-    const skillsDir = path.resolve(__dirname, '../skills')
+    const skillsDir = path.resolve(
+      __fileURLToPath(new URL('.', import.meta.url)),
+      '../skills',
+    )
     const canonicalSkillsDir = path.resolve(
-      __dirname,
+      __fileURLToPath(new URL('.', import.meta.url)),
       '../../skills/public/skills',
     )
     if (fs.existsSync(canonicalSkillsDir)) {

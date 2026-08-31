@@ -1,7 +1,7 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getConfig = require('./getConfig.js')
+import getConfig from './getConfig.js'
 
-module.exports = async function getPostScript(options) {
+export default async function getPostScript(options) {
   let postScript = options?.postScript || options?.['post-script']
   const config = getConfig()
 

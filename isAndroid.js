@@ -1,6 +1,6 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getAndroidManifest = require('./getAndroidManifest.js')
+import getAndroidManifest from './getAndroidManifest.js'
 
-module.exports = function isAndroid() {
+export default function isAndroid() {
   return !!getAndroidManifest()
 }

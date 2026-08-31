@@ -1,7 +1,10 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const os = require('node:os')
-const path = require('node:path')
-const { LocalStorage } = require('node-localstorage')
+import os from 'node:os'
+import path from 'node:path'
+
+import __module1 from 'node-localstorage'
+
+const { LocalStorage } = __module1
 
 let localStorage
 
@@ -10,4 +13,4 @@ if (!localStorage) {
   localStorage = new LocalStorage(path.resolve(homeDir, '.multilocale'))
 }
 
-module.exports = localStorage
+export default localStorage

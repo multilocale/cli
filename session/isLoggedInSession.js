@@ -1,8 +1,9 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const { isRefreshTokenExpired } = require('@multilocale/client/refreshToken.js')
-const clearSession = require('./clearSession.js')
+import { isRefreshTokenExpired } from '@multilocale/client/refreshToken.js'
 
-module.exports = function isLoggedInSession() {
+import clearSession from './clearSession.js'
+
+export default function isLoggedInSession() {
   let isLoggedIn = false
 
   if (!isRefreshTokenExpired()) {

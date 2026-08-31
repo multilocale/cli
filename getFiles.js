@@ -1,6 +1,8 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const fs = require('fs-extra')
-const path = require('node:path')
+
+import path from 'node:path'
+
+import fs from 'fs-extra'
 
 function getFiles_(dir) {
   let subdirs = fs.readdirSync(dir)
@@ -18,7 +20,11 @@ function getFiles_(dir) {
     try {
       stats = fs.statSync(resource)
     } catch (error) {
-      if (error.code === 'ENOENT' || error.code === 'ELOOP' || error.code === 'EACCES') {
+      if (
+        error.code === 'ENOENT' ||
+        error.code === 'ELOOP' ||
+        error.code === 'EACCES'
+      ) {
         return []
       }
       throw error
@@ -40,4 +46,4 @@ function getFiles(dir) {
   return files
 }
 
-module.exports = getFiles
+export default getFiles

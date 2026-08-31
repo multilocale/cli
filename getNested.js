@@ -1,5 +1,5 @@
 /* Copyright 2013 - 2026 Waiterio LLC */
-const getConfig = require('./getConfig.js')
+import getConfig from './getConfig.js'
 
 // How `download` decides whether to write a flat dot-path dictionary
 // (`{"checkout.failed": "…"}`) or the nested one it was imported from
@@ -52,11 +52,11 @@ const resolveNested = ({ configured, option }) => {
   return configured
 }
 
-module.exports = async function getNested(options) {
+export default async function getNested(options) {
   return resolveNested({
     configured: getConfig()?.nested,
     option: options?.nested,
   })
 }
 
-module.exports.resolveNested = resolveNested
+export { resolveNested }

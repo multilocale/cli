@@ -4,7 +4,7 @@
 // and that the flat default is still byte-for-byte what it always was.
 //
 // The command runs for real, in a real directory, as a child process — see
-// downloadFixture.cjs for why it is a child process and not vi.mock. Only the
+// downloadFixture.js for why it is a child process and not vi.mock. Only the
 // three remote calls are stubbed, and HOME points at an empty directory so a
 // stub that stops working fails unauthenticated rather than reaching
 // production.
@@ -13,12 +13,12 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+
 import flattenTranslations from '../flattenTranslations.js'
 
-const testsDirectory = path.dirname(fileURLToPath(import.meta.url))
+const testsDirectory = import.meta.dirname
 const cli = path.resolve(testsDirectory, '../index.js')
-const preload = path.resolve(testsDirectory, 'downloadFixture.cjs')
+const preload = path.resolve(testsDirectory, 'downloadFixture.js')
 
 const nestedCatalogue = {
   checkout: {
@@ -78,7 +78,7 @@ const download = (argv = [], { config, paths, phrases } = {}) => {
 
   return execFileSync(
     process.execPath,
-    ['--require', preload, cli, 'download', ...argv],
+    ['--import', preload, cli, 'download', ...argv],
     {
       cwd: path.join(directory, 'work'),
       encoding: 'utf8',

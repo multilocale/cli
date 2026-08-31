@@ -1,15 +1,17 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const inquirer = require('inquirer')
-const isInteractive = require('@monorepool/agentfirst/isInteractive.js')
-const getProjectModule = require('@multilocale/client/getProject.js')
-const getProjectsModule = require('@multilocale/client/getProjects.js')
+
+import isInteractive from '@monorepool/agentfirst/isInteractive.js'
+import getProjectModule from '@multilocale/client/getProject.js'
+import getProjectsModule from '@multilocale/client/getProjects.js'
+import inquirer from 'inquirer'
+
+import getConfig from './getConfig.js'
+import setConfig from './setConfig.js'
 
 const getProjectHttp = getProjectModule.default || getProjectModule
 const getProjects = getProjectsModule.default || getProjectsModule
-const getConfig = require('./getConfig.js')
-const setConfig = require('./setConfig.js')
 
-module.exports = async function getProject(options) {
+export default async function getProject(options) {
   let projectIdOrName = options?.project
   let project
 

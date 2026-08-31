@@ -1,15 +1,13 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import commander from 'commander'
+
+import ensureAuth from './ensureAuth.js'
+import getProject from './getProject.js'
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
-const ensureAuth = require('./ensureAuth.js')
-const getProject = require('./getProject.js')
 
 const bold = text => `\x1b[1m${text}\x1b[22m`
 const cyan = text => `\x1b[36m${text}\x1b[39m`
@@ -61,9 +59,7 @@ function duplicatesCommand() {
       )
 
       if (options.json) {
-        printJson(
-          duplicates.map(([value, entries]) => ({ value, entries })),
-        )
+        printJson(duplicates.map(([value, entries]) => ({ value, entries })))
 
         return
       }
@@ -79,9 +75,7 @@ function duplicatesCommand() {
           console.log(bold(cyan(`"${value}":`)))
 
           entries.forEach(entry => {
-            const otherProjects = entry.projects.filter(
-              p => p !== projectName,
-            )
+            const otherProjects = entry.projects.filter(p => p !== projectName)
 
             if (otherProjects.length > 0) {
               console.log(
@@ -103,4 +97,4 @@ function duplicatesCommand() {
   return command
 }
 
-module.exports = duplicatesCommand
+export default duplicatesCommand

@@ -1,11 +1,12 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const agentfirstLoginCommand = require('@monorepool/agentfirst/loginCommand.js')
-const getProjectsModule = require('@multilocale/client/getProjects.js')
-const {
-  setApiKeyForMultilocaleClient,
-} = require('@multilocale/client/apiKey.js')
-const { BINARY_NAME, ENV_KEY_NAME, getAppUrl } = require('./cliConfig.js')
-const session = require('./sessionStore.js')
+import agentfirstLoginCommand from '@monorepool/agentfirst/loginCommand.js'
+import { setApiKeyForMultilocaleClient } from '@multilocale/client/apiKey.js'
+import getProjectsModule from '@multilocale/client/getProjects.js'
+
+import __module1 from './cliConfig.js'
+import session from './sessionStore.js'
+
+const { BINARY_NAME, ENV_KEY_NAME, getAppUrl } = __module1
 
 const getProjects = getProjectsModule.default || getProjectsModule
 
@@ -34,4 +35,4 @@ function loginCommand() {
   })
 }
 
-module.exports = loginCommand
+export default loginCommand

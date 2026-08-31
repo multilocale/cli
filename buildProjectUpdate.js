@@ -20,7 +20,7 @@ function unique(values) {
   return [...new Set(values)]
 }
 
-module.exports = function buildProjectUpdate({ existing, options = {} }) {
+export default function buildProjectUpdate({ existing, options = {} }) {
   const changes = {}
 
   if (options.name !== undefined) {

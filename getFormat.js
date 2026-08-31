@@ -1,5 +1,5 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getConfig = require('./getConfig.js')
+import getConfig from './getConfig.js'
 
 const formats = [
   'cjs',
@@ -10,7 +10,7 @@ const formats = [
   // 'xml',
 ]
 
-module.exports = async function getFormat(options) {
+export default async function getFormat(options) {
   let format = options?.format
   const config = getConfig()
 

@@ -4,8 +4,8 @@
 //
 // The logic is copied — deliberately, not imported — from
 // `multilocale/www/pages/JsonTranslationKeyCheckerPage/translationKeys.js`,
-// which is ESM inside the marketing site and not something this CommonJS
-// bundle can reach. The escaping rules are kept identical so the website's
+// which belongs to the marketing-site package rather than this CLI bundle.
+// The escaping rules are kept identical so the website's
 // key checker and the CLI agree on what `{"checkout":{"failed":"…"}}` is
 // called: `checkout.failed`. If you change one, change the other.
 //
@@ -106,7 +106,5 @@ function flattenTranslations(dictionary) {
   return { nested, skipped, translations }
 }
 
-module.exports = flattenTranslations
-module.exports.escapeKeySegment = escapeKeySegment
-module.exports.flattenTranslations = flattenTranslations
-module.exports.isPlainObject = isPlainObject
+export default flattenTranslations
+export { escapeKeySegment, isPlainObject }

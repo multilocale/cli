@@ -1,22 +1,24 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const addPhrasesModule = require('@multilocale/client/addPhrases.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
-const translateToAllLanguagesModule = require('@multilocale/client/translateToAllLanguages.js')
-const uuidModule = require('@multilocale/client/uuid.js')
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import addPhrasesModule from '@multilocale/client/addPhrases.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import translateToAllLanguagesModule from '@multilocale/client/translateToAllLanguages.js'
+import translateToAllLanguagesLocalModule from '@multilocale/client/translateToAllLanguagesLocal.js'
+import uuidModule from '@multilocale/client/uuid.js'
+import commander from 'commander'
+
+import ensureAuth from './ensureAuth.js'
+import getProject from './getProject.js'
 
 const addPhrases = addPhrasesModule.default || addPhrasesModule
 const getPhrases = getPhrasesModule.default || getPhrasesModule
 const translateToAllLanguages =
   translateToAllLanguagesModule.default || translateToAllLanguagesModule
+const translateToAllLanguagesLocal =
+  translateToAllLanguagesLocalModule.default ||
+  translateToAllLanguagesLocalModule
 const uuid = uuidModule.default || uuidModule
-const ensureAuth = require('./ensureAuth.js')
-const getProject = require('./getProject.js')
 
 function addCommand() {
   const command = new commander.Command('add')
@@ -31,8 +33,8 @@ function addCommand() {
   command.option('--project [project]', 'project id or name')
   command.option(
     '-m, --model <model>',
-    'translation model: "gpt-5-nano" (default), "gpt-5-mini", "gemini-3.5-flash", or "claude-haiku-4-5"',
-    'gpt-5-nano',
+    'translation model (uses local LLM if available: claude, codex; fallback to API: gpt-5.6-luna, gpt-5-mini, gemini-3.5-flash, claude-haiku-4-5)',
+    'gpt-5.6-luna',
   )
   command.option(
     '-c, --context <context>',
@@ -93,14 +95,35 @@ function addCommand() {
       const targetLocales = project.locales.filter(l => l !== language)
 
       if (targetLocales.length > 0) {
-        const language2value = await translateToAllLanguages({
-          value: phraseOriginal.value,
-          languages: targetLocales,
-          from: language,
-          model,
-          context,
-          projectId: project._id,
-        })
+        let language2value
+        let translationModel = model
+        let usedLocalLlm = false
+
+        try {
+          print('attempting local LLM translation...')
+          const localResult = await translateToAllLanguagesLocal({
+            value: phraseOriginal.value,
+            languages: targetLocales,
+            from: language,
+            context,
+          })
+          language2value = localResult.language2value
+          translationModel = localResult.model
+          usedLocalLlm = true
+          print(`using local ${translationModel}`)
+        } catch (localError) {
+          print(`local translation unavailable: ${localError.message}`)
+          print('falling back to multilocale API...')
+          const apiResult = await translateToAllLanguages({
+            value: phraseOriginal.value,
+            languages: targetLocales,
+            from: language,
+            model,
+            context,
+            projectId: project._id,
+          })
+          language2value = apiResult
+        }
 
         targetLocales.forEach(locale => {
           const translation = language2value[locale]
@@ -108,9 +131,9 @@ function addCommand() {
             ...phraseOriginal,
             _id: uuid(),
             language: locale,
-            googleTranslate: true,
+            googleTranslate: !usedLocalLlm,
             machineTranslated: true,
-            model,
+            model: translationModel,
             context: null,
             value: translation,
           }
@@ -146,4 +169,4 @@ function addCommand() {
   return command
 }
 
-module.exports = addCommand
+export default addCommand

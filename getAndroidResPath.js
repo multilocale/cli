@@ -1,8 +1,9 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const path = require('node:path')
-const getAndroidManifest = require('./getAndroidManifest.js')
+import path from 'node:path'
 
-module.exports = function getAndroidResPath() {
+import getAndroidManifest from './getAndroidManifest.js'
+
+export default function getAndroidResPath() {
   const androidManifestPath = getAndroidManifest()
   // console.log({ androidManifestPath })
   let resPath = path.resolve(

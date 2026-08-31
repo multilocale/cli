@@ -1,15 +1,14 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const {
-  setAccessTokenForMultilocaleClient,
+import {
   setAccessTokenCallbackForMultilocaleClient,
-} = require('@multilocale/client/accessToken.js')
-const {
-  setRefreshTokenForMultilocaleClient,
-} = require('@multilocale/client/refreshToken.js')
-const setAccessToken = require('./setAccessToken.js')
-const setRefreshToken = require('./setRefreshToken.js')
+  setAccessTokenForMultilocaleClient,
+} from '@multilocale/client/accessToken.js'
+import { setRefreshTokenForMultilocaleClient } from '@multilocale/client/refreshToken.js'
 
-module.exports = async function storeNewSession({ accessToken, refreshToken }) {
+import setAccessToken from './setAccessToken.js'
+import setRefreshToken from './setRefreshToken.js'
+
+export default async function storeNewSession({ accessToken, refreshToken }) {
   try {
     setAccessToken(accessToken)
     setRefreshToken(refreshToken)

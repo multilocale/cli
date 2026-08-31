@@ -1,5 +1,5 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getConfig = require('./getConfig.js')
+import getConfig from './getConfig.js'
 
 // Resolves where a project's translation files live, in the order the CLI has
 // always intended: the project's own `paths` (set server-side) wins over the
@@ -21,7 +21,7 @@ const getConfig = require('./getConfig.js')
 // Defaulting rather than throwing is the right call here: a wrong-but-sane
 // default makes `import`/`unused` report "No matching files for path …", which
 // tells the user exactly what to fix, where a TypeError tells them nothing.
-module.exports = function getPaths({ project, format, extension = 'json' }) {
+export default function getPaths({ project, format, extension = 'json' }) {
   const config = getConfig()
   const paths = project?.paths?.length ? project.paths : config?.paths
 

@@ -1,8 +1,8 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
 
-const getFiles = require('./getFiles.js')
+import getFiles from './getFiles.js'
 
-module.exports = function getAndroidManifest() {
+export default function getAndroidManifest() {
   let files = getFiles()
   files = files.filter(file => file.endsWith('gatsby-config.js'))
 

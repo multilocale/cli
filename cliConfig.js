@@ -19,4 +19,4 @@ function getApiUrl() {
   return process.env.MULTILOCALE_API_URL || 'https://api.multilocale.com'
 }
 
-module.exports = { BINARY_NAME, ENV_KEY_NAME, getApiUrl, getAppUrl }
+export default { BINARY_NAME, ENV_KEY_NAME, getApiUrl, getAppUrl }

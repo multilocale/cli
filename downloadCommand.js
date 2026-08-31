@@ -1,27 +1,26 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const { execSync } = require('child_process')
-const fs = require('fs-extra')
-const path = require('node:path')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const getPhrasesModule = require('@multilocale/client/getPhrases.js')
+
+import { execSync } from 'child_process'
+import path from 'node:path'
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import getPhrasesModule from '@multilocale/client/getPhrases.js'
+import commander from 'commander'
+import fs from 'fs-extra'
+
+import ensureAuth from './ensureAuth.js'
+import getAndroidResPath from './getAndroidResPath.js'
+import getExtension from './getExtension.js'
+import getFormat from './getFormat.js'
+import getHeader from './getHeader.js'
+import getNested from './getNested.js'
+import getPaths from './getPaths.js'
+import getPostScript from './getPostScript.js'
+import getProject from './getProject.js'
+import isAndroid from './isAndroid.js'
+import unflattenTranslations from './unflattenTranslations.js'
 
 const getPhrases = getPhrasesModule.default || getPhrasesModule
-const ensureAuth = require('./ensureAuth.js')
-const getAndroidResPath = require('./getAndroidResPath.js')
-const getExtension = require('./getExtension.js')
-const getFormat = require('./getFormat.js')
-const getHeader = require('./getHeader.js')
-const getNested = require('./getNested.js')
-const getPaths = require('./getPaths.js')
-const getProject = require('./getProject.js')
-const getPostScript = require('./getPostScript.js')
-const isAndroid = require('./isAndroid.js')
-const unflattenTranslations = require('./unflattenTranslations.js')
 
 function sortObject(o) {
   return Object.keys(o)
@@ -340,4 +339,4 @@ function downloadCommand() {
   return command
 }
 
-module.exports = downloadCommand
+export default downloadCommand

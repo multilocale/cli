@@ -278,7 +278,7 @@ multilocale schema projects create   # one command's arguments and flags
 ## Machine translation
 
 `add` and `localize` accept `-m/--model` to pick the translation model:
-`gpt-5-nano` (default), `gpt-5-mini`, `gemini-3.5-flash`, or
+`gpt-5.6-luna` (default), `gpt-5-mini`, `gemini-3.5-flash`, or
 `claude-haiku-4-5`. `add` also accepts `-c/--context` — a free-text hint
 passed to the model. For short or ambiguous UI strings, always pass the
 product domain, what the word means there, and the UI role; an isolated

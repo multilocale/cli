@@ -1,8 +1,8 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const getConfig = require('./getConfig.js')
-const getFormat = require('./getFormat.js')
+import getConfig from './getConfig.js'
+import getFormat from './getFormat.js'
 
-module.exports = async function getExtension(options) {
+export default async function getExtension(options) {
   let extension = options?.extension
   let format = await getFormat(options)
 

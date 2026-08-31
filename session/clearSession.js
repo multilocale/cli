@@ -1,15 +1,14 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
 
-const {
-  setAccessTokenForMultilocaleClient,
+import {
   setAccessTokenCallbackForMultilocaleClient,
-} = require('@multilocale/client/accessToken.js')
-const {
-  setRefreshTokenForMultilocaleClient,
-} = require('@multilocale/client/refreshToken.js')
-const localStorage = require('./localStorage.js')
+  setAccessTokenForMultilocaleClient,
+} from '@multilocale/client/accessToken.js'
+import { setRefreshTokenForMultilocaleClient } from '@multilocale/client/refreshToken.js'
 
-module.exports = function clearSession() {
+import localStorage from './localStorage.js'
+
+export default function clearSession() {
   localStorage.clear()
 
   setAccessTokenCallbackForMultilocaleClient(null)

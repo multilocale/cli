@@ -1,15 +1,13 @@
 /* Copyright 2013 - 2024 Waiterio LLC */
-const commander = require('commander')
-const {
-  withJson,
-  printJson,
-  fail,
-} = require('@monorepool/agentfirst/output.js')
-const deletePhrasesModule = require('@multilocale/client/deletePhrases.js')
+
+import { fail, printJson, withJson } from '@monorepool/agentfirst/output.js'
+import deletePhrasesModule from '@multilocale/client/deletePhrases.js'
+import commander from 'commander'
+
+import ensureAuth from './ensureAuth.js'
+import getProject from './getProject.js'
 
 const deletePhrases = deletePhrasesModule.default || deletePhrasesModule
-const ensureAuth = require('./ensureAuth.js')
-const getProject = require('./getProject.js')
 
 function deleteCommand() {
   const command = new commander.Command('delete')
@@ -49,4 +47,4 @@ function deleteCommand() {
   return command
 }
 
-module.exports = deleteCommand
+export default deleteCommand

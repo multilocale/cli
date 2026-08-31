@@ -15,7 +15,7 @@
 // flattenTranslations.js. Change one and you must change the other, plus the
 // round-trip properties in __tests__/unflattenTranslations.test.js.
 
-const { isPlainObject } = require('./flattenTranslations.js')
+import { isPlainObject } from './flattenTranslations.js'
 
 // `escapeKeySegment` only ever emits `\\` and `\.`, so those are the only two
 // sequences consumed here. A backslash in front of anything else is kept
@@ -184,6 +184,5 @@ function unflattenTranslations(translations) {
   return { conflicts, translations: result }
 }
 
-module.exports = unflattenTranslations
-module.exports.splitKeyPath = splitKeyPath
-module.exports.unflattenTranslations = unflattenTranslations
+export default unflattenTranslations
+export { splitKeyPath }
