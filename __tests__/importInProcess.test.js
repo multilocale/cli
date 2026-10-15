@@ -3,7 +3,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { format } from 'node:util'
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 // eslint-disable-next-line import-js/no-extraneous-dependencies
 import {
   afterAll,
@@ -26,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   paths: ['translations/%lang%.json'],
   printJson: vi.fn(),
   translateString: vi.fn(),
+  translateStringLocal: vi.fn(),
   uuid: vi.fn(),
 }))
 
@@ -43,6 +46,9 @@ vi.mock('@multilocale/client/addPhrases.js', () => ({
 vi.mock('@multilocale/client/translateString.js', () => ({
   default: (...args) => mocks.translateString(...args),
 }))
+vi.mock('@multilocale/client/translateStringLocal.js', () => ({
+  default: (...args) => mocks.translateStringLocal(...args),
+}))
 vi.mock('@multilocale/client/uuid.js', () => ({
   default: (...args) => mocks.uuid(...args),
 }))
@@ -58,6 +64,8 @@ vi.mock('../isAndroid.js', () => ({ default: () => mocks.isAndroid }))
 vi.mock('../isJavascript.js', () => ({ default: () => mocks.isJavascript }))
 
 const importCommand = (await import('../importCommand.js')).default
+
+const localTranslationError = new Error('local translation disabled in tests')
 
 const project = {
   _id: 'project-1',
@@ -108,6 +116,7 @@ describe('import workflow in process', () => {
     mocks.translateString.mockImplementation(async ({ string, to }) => ({
       translation: `${string} (${to})`,
     }))
+    mocks.translateStringLocal.mockRejectedValue(localTranslationError)
     let uuid = 0
     mocks.uuid.mockImplementation(() => {
       uuid += 1
@@ -132,7 +141,35 @@ describe('import workflow in process', () => {
       JSON.stringify({ greeting: 'Hola' }),
     )
     mocks.files = ['/translations/en.json', '/translations/es.json']
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expectConsoleError('import into multilocale.com')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError(format({ locales: project.locales, paths: mocks.paths }))
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale fr',
+    )
+    expectConsoleError('Found 2 files in 2 locales:')
+    expectConsoleError('  /translations/en.json')
+    expectConsoleError('  /translations/es.json')
+    expectConsoleError(
+      'translations/en.json: nested dictionary flattened into dot paths (e.g. checkout.failed)',
+    )
+    expectConsoleError('translations/en.json: skipped key variants (array)')
+    expectConsoleError('en: Found 4 phrases')
+    expectConsoleError('es: Found 1 phrases')
+    expectConsoleError(
+      'These files are nested: add "nested": true to multilocale.json (or pass --nested to download) to get them back in the same shape.',
+    )
+    expectConsoleError(
+      'es: translated key checkout.failed to Payment failed (es)',
+    )
+    expectConsoleError(
+      'fr: translated key checkout.failed to Payment failed (fr)',
+    )
+    expectConsoleError('es: translated key count to 4 (es)')
+    expectConsoleError('fr: translated key count to 4 (fr)')
+    expectConsoleError('es: translated key empty to empty (es)')
+    expectConsoleError('fr: translated key empty to empty (fr)')
+    expectConsoleError('fr: translated key greeting to Hello (fr)')
 
     await invoke(['--json'])
 
@@ -167,12 +204,6 @@ describe('import workflow in process', () => {
       string: 'Payment failed',
       to: 'es',
     })
-    expect(consoleError.mock.calls.flat().join('\n')).toContain(
-      'nested dictionary flattened into dot paths',
-    )
-    expect(consoleError.mock.calls.flat().join('\n')).toContain(
-      'skipped key variants',
-    )
     expect(mocks.printJson).toHaveBeenCalledWith(
       expect.objectContaining({ ok: true, phrases: phrases.length }),
     )
@@ -226,6 +257,11 @@ describe('import workflow in process', () => {
       '/app/src/main/res/values-es/strings.xml',
     ]
     mocks.isAndroid = true
+    expectConsoleError('import into multilocale.com')
+    expectConsoleError('Android project detected')
+    expectConsoleError('Found 2 languages')
+    expectConsoleError('en: Found 1 phrases')
+    expectConsoleError('es: Found 1 phrases')
 
     await invoke(['--json'])
 
@@ -247,6 +283,18 @@ describe('import workflow in process', () => {
   })
 
   it('reports a clean zero result when configured files are not present', async () => {
+    expectConsoleError('import into multilocale.com')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError(format({ locales: project.locales, paths: mocks.paths }))
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale en',
+    )
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale es',
+    )
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale fr',
+    )
     await invoke(['--json'])
     expect(mocks.addPhrases).not.toHaveBeenCalled()
     expect(mocks.printJson).toHaveBeenCalledWith({

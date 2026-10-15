@@ -46,11 +46,12 @@ multilocale signup --email founder@example.com --json
 
 ## Authentication
 
-There are two ways in:
+There are three ways in:
 
 ```bash
-multilocale login              # interactive: choose browser or API key
+multilocale login              # interactive: choose browser, another device or API key
 multilocale login --browser    # browser flow
+multilocale login --device     # approve the login from a phone or another computer
 multilocale login --with-key   # masked prompt for an API key secret
 multilocale logout             # clear the stored session and any stored key
 ```
@@ -58,8 +59,19 @@ multilocale logout             # clear the stored session and any stored key
 `multilocale login --browser` starts a temporary localhost server, opens your
 browser to app.multilocale.com, and receives the session tokens on the
 redirect back. If the browser does not open, the login URL is printed so you
-can visit it by hand. Tokens are stored in `~/.multilocale/` and refreshed
-automatically when they expire.
+can visit it by hand. The same screen shows a one-time code too, so the login
+can also be approved from another device. Tokens are stored in
+`~/.multilocale/` and refreshed automatically when they expire.
+
+`multilocale login --device` is for a terminal whose browser you cannot use: a
+remote desktop without copy and paste, an SSH session, a server. It prints a
+link, a QR code and a one-time code such as `WDJB-MJHT`. Scan the QR code with
+your phone, or open app.multilocale.com/cli on any device where you are signed
+in to Multilocale and type the code; check that the code matches the terminal
+and approve. The terminal logs itself in within a couple of seconds. Nothing is
+typed or pasted on the remote machine. The code works once and expires after
+ten minutes, and the session only ever travels encrypted to the terminal that
+asked for it.
 
 `multilocale login --with-key` prompts (masked) for an API key secret, created
 per project on app.multilocale.com under the project's API keys page, verifies
@@ -76,7 +88,7 @@ hijacks an interactive session.
 In an interactive terminal, commands that need a session and find none start
 the browser login on their own. Without a terminal (agents, CI, pipes) they
 fail fast with exit code 1 and login instructions on stderr instead of opening
-a browser.
+a browser (`multilocale login --device` still works there).
 
 ## Machine-readable output
 
@@ -98,7 +110,7 @@ multilocale schema phrases list     # one subcommand's arguments and flags
 ### Session
 
 ```bash
-multilocale login    # log in via browser or API key; credentials land in ~/.multilocale/
+multilocale login    # log in via browser, another device or API key; credentials land in ~/.multilocale/
 multilocale logout   # clear the stored session and any stored key
 ```
 
@@ -155,6 +167,7 @@ multilocale add "Some value"                 # value defaults to the key
 multilocale update "SOME_KEY" "New value" -l fr   # set one language's value
 multilocale delete "SOME_KEY"                # delete the key's rows from the project
 multilocale share "SOME_KEY" other-project   # attach another project to the phrase
+multilocale unshare "SOME_KEY"               # detach this project, keep the phrase for the others
 ```
 
 `add` creates the phrase in the project's default locale and machine-translates
@@ -163,11 +176,17 @@ the project. `update` sets the exact value for one key and language (default:
 the project's default locale) and clears the machine-translated flags. Phrases
 can be shared across projects: `update` warns and changes the value for every
 project sharing the key, and `delete` removes shared rows outright rather than
-detaching the current project — check `multilocale phrases get <key>` first.
+detaching the current project — check `multilocale phrases get <key>` first
+and use `unshare` when other projects still need the phrase.
 
 `share` attaches one or more target projects (by id or name) to every locale
 row of an existing phrase; `--project` selects the source project. The targets
 receive only the locales the source phrase has.
+
+`unshare` is the inverse: it removes the current project (or `--project`) from
+every locale row of a key and leaves the rows in place for the other projects.
+It refuses a key whose rows belong to that project alone, which `delete`
+handles.
 
 ### Locale rollout
 
@@ -278,7 +297,7 @@ multilocale schema projects create   # one command's arguments and flags
 ## Machine translation
 
 `add` and `localize` accept `-m/--model` to pick the translation model:
-`gpt-5.6-luna` (default), `gpt-5-mini`, `gemini-3.5-flash`, or
+`gpt-6-luna` (default), `gpt-5-mini`, `gemini-3.5-flash`, or
 `claude-haiku-4-5`. `add` also accepts `-c/--context` — a free-text hint
 passed to the model. For short or ambiguous UI strings, always pass the
 product domain, what the word means there, and the UI role; an isolated

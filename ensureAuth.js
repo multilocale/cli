@@ -74,6 +74,7 @@ export default async function ensureAuth() {
         binaryName: BINARY_NAME,
         envKeyName: ENV_KEY_NAME,
         appUrl: getAppUrl(),
+        device: true,
         headline: 'Not logged in, and no terminal to log in from.',
       }),
     )

@@ -19,6 +19,7 @@ import projectsCommand from './projectsCommand.js'
 import schemaCommand from './schemaCommand.js'
 import shareCommand from './shareCommand.js'
 import signupCommand from './signupCommand.js'
+import unshareCommand from './unshareCommand.js'
 import unusedCommand from './unusedCommand.js'
 import updateCommand from './updateCommand.js'
 
@@ -49,6 +50,7 @@ program
       baseDirectory: fileURLToPath(new URL('.', import.meta.url)),
     }),
   )
+  .addCommand(unshareCommand())
   .addCommand(unusedCommand())
   .addCommand(updateCommand())
 

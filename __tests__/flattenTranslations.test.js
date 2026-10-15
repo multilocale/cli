@@ -105,10 +105,11 @@ describe('flattenTranslations', () => {
     expect(skipped).toEqual([])
   })
 
-  it('reports arrays, nulls and empty objects instead of importing them', () => {
+  it('reports unsupported leaves instead of importing them', () => {
     const { skipped, translations } = flattenTranslations({
       variants: ['one', 'two'],
       missing: null,
+      unresolved: undefined,
       empty: {},
       kept: 'Kept',
     })
@@ -117,6 +118,7 @@ describe('flattenTranslations', () => {
     expect(skipped).toEqual([
       { key: 'variants', reason: 'array' },
       { key: 'missing', reason: 'null' },
+      { key: 'unresolved', reason: 'undefined' },
       { key: 'empty', reason: 'empty object' },
     ])
   })

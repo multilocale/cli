@@ -1,6 +1,6 @@
 {
   "name": "multilocale",
-  "version": "1.3.3",
+  "version": "1.4.0",
   "private": false,
   "description": "Multilocale CLI — software localization projects, phrases, translation files and machine translation from the terminal. npx multilocale",
   "license": "Apache-2.0",

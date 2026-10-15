@@ -6,11 +6,7 @@ import __module1 from 'node-localstorage'
 
 const { LocalStorage } = __module1
 
-let localStorage
-
-if (!localStorage) {
-  const homeDir = os.homedir()
-  localStorage = new LocalStorage(path.resolve(homeDir, '.multilocale'))
-}
+const homeDir = os.homedir()
+const localStorage = new LocalStorage(path.resolve(homeDir, '.multilocale'))
 
 export default localStorage

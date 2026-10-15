@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 // eslint-disable-next-line import-js/no-extraneous-dependencies
 import {
   afterAll,
@@ -26,6 +27,7 @@ const mocks = vi.hoisted(() => ({
   isJavascript: true,
   printJson: vi.fn(),
   translateToAllLanguages: vi.fn(),
+  translateToAllLanguagesLocal: vi.fn(),
   updateProject: vi.fn(),
   uuid: vi.fn(),
 }))
@@ -50,6 +52,9 @@ vi.mock('@multilocale/client/getPhrases.js', () => ({
 vi.mock('@multilocale/client/translateToAllLanguages.js', () => ({
   default: (...args) => mocks.translateToAllLanguages(...args),
 }))
+vi.mock('@multilocale/client/translateToAllLanguagesLocal.js', () => ({
+  default: (...args) => mocks.translateToAllLanguagesLocal(...args),
+}))
 vi.mock('@multilocale/client/updateProject.js', () => ({
   default: (...args) => mocks.updateProject(...args),
 }))
@@ -67,6 +72,8 @@ vi.mock('../isAndroid.js', () => ({ default: () => mocks.isAndroid }))
 vi.mock('../isJavascript.js', () => ({ default: () => mocks.isJavascript }))
 
 const localizeCommand = (await import('../localizeCommand.js')).default
+
+const localTranslationError = new Error('local translation disabled in tests')
 
 const baseProject = {
   _id: 'project-1',
@@ -120,6 +127,7 @@ describe('localize workflow in process', () => {
           languages.map(locale => [locale, `${value} (${locale})`]),
         ),
     )
+    mocks.translateToAllLanguagesLocal.mockRejectedValue(localTranslationError)
     mocks.updateProject.mockImplementation(async value => value)
     let uuid = 0
     mocks.uuid.mockImplementation(() => {
@@ -162,6 +170,27 @@ describe('localize workflow in process', () => {
       }
       return []
     })
+    expectConsoleError('localize')
+    expectConsoleError('Locales to add: es, fr')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError('Project website now lists 3 locales (2 added)')
+    expectConsoleError(
+      'No local translation files matched — reading existing phrases from multilocale.com',
+    )
+    expectConsoleError('Read 3/3 locales')
+    expectConsoleError('Found 3 phrase rows across 2 keys')
+    expectConsoleError('Translating key "greeting" to 1 locales...')
+    expectConsoleError(
+      '  local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('  falling back to multilocale API...')
+    expectConsoleError('fr: translated key greeting to Hello (fr)')
+    expectConsoleError('Translating key "technical" to 2 locales...')
+    expectConsoleError(
+      'Keeping technical label "PC123 - HIRAGANA" unchanged in every locale',
+    )
+    expectConsoleError('es: translated key technical to PC123 - HIRAGANA')
+    expectConsoleError('fr: translated key technical to PC123 - HIRAGANA')
 
     await invoke(['es, fr', '--model', 'gpt-5-mini', '--json'])
 
@@ -212,6 +241,23 @@ describe('localize workflow in process', () => {
         ? [{ key: 'greeting', language: 'en', value: 'Hello' }]
         : [],
     )
+    expectConsoleError('localize')
+    expectConsoleError(
+      'Already on the project: 1 locales — will still reconcile their phrases',
+    )
+    expectConsoleError('Javascript project detected')
+    expectConsoleError('Project website now lists 2 locales (0 added)')
+    expectConsoleError(
+      'No local translation files matched — reading existing phrases from multilocale.com',
+    )
+    expectConsoleError('Read 2/2 locales')
+    expectConsoleError('Found 1 phrase rows across 1 keys')
+    expectConsoleError('Translating key "greeting" to 1 locales...')
+    expectConsoleError(
+      '  local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('  falling back to multilocale API...')
+    expectConsoleError('es: translated key greeting to Hello (es)')
 
     await invoke(['es', '--json'])
 
@@ -233,6 +279,28 @@ describe('localize workflow in process', () => {
       JSON.stringify({ empty: '', greeting: 'Hello' }),
     )
     mocks.files = ['/translations/en.json']
+    expectConsoleError('localize')
+    expectConsoleError('Locales to add: es')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError('Project website now lists 2 locales (1 added)')
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale es',
+    )
+    expectConsoleError('Found 1 files in 1 locales:')
+    expectConsoleError('  /translations/en.json')
+    expectConsoleError('en: Found 2 phrases')
+    expectConsoleError('Translating key "empty" to 1 locales...')
+    expectConsoleError(
+      '  local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('  falling back to multilocale API...')
+    expectConsoleError('es: translated key empty to empty (es)')
+    expectConsoleError('Translating key "greeting" to 1 locales...')
+    expectConsoleError(
+      '  local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('  falling back to multilocale API...')
+    expectConsoleError('es: translated key greeting to Hello (es)')
 
     await invoke(['es', '--json'])
 
@@ -250,6 +318,18 @@ describe('localize workflow in process', () => {
   })
 
   it('supports all known locales and rejects Android or unknown roots', async () => {
+    expectConsoleError('localize')
+    expectConsoleError(
+      'Already on the project: 1 locales — will still reconcile their phrases',
+    )
+    expectConsoleError('Locales to add: es, fr')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError('Project website now lists 3 locales (2 added)')
+    expectConsoleError(
+      'No local translation files matched — reading existing phrases from multilocale.com',
+    )
+    expectConsoleError('Read 3/3 locales')
+    expectConsoleError('Found 0 phrase rows across 0 keys')
     await invoke(['all', '--json'])
     expect(mocks.updateProject).toHaveBeenCalledWith(
       expect.objectContaining({ locales: ['en', 'es', 'fr'] }),
@@ -275,6 +355,41 @@ describe('localize workflow in process', () => {
       )
       mocks.translateToAllLanguages.mockRejectedValue(
         Object.assign(new Error('unavailable'), { status: 503 }),
+      )
+      expectConsoleError('localize')
+      expectConsoleError('Locales to add: es')
+      expectConsoleError('Javascript project detected')
+      expectConsoleError('Project website now lists 2 locales (1 added)')
+      expectConsoleError(
+        'No local translation files matched — reading existing phrases from multilocale.com',
+      )
+      expectConsoleError('Read 2/2 locales')
+      expectConsoleError('Found 1 phrase rows across 1 keys')
+      expectConsoleError('Translating key "greeting" to 1 locales...')
+      expectConsoleError(
+        '  local translation unavailable: local translation disabled in tests',
+      )
+      expectConsoleError('  falling back to multilocale API...')
+      expectConsoleError(
+        '  translate failed for "greeting" (status 503), retry 1/5 in 5s',
+      )
+      expectConsoleError(
+        '  translate failed for "greeting" (status 503), retry 2/5 in 10s',
+      )
+      expectConsoleError(
+        '  translate failed for "greeting" (status 503), retry 3/5 in 15s',
+      )
+      expectConsoleError(
+        '  translate failed for "greeting" (status 503), retry 4/5 in 20s',
+      )
+      expectConsoleError(
+        '  translate failed for "greeting" (status 503), retry 5/5 in 25s',
+      )
+      expectConsoleError(
+        'Giving up on key "greeting" after 6 attempts (last status 503) — skipping',
+      )
+      expectConsoleError(
+        'INCOMPLETE: 1 key(s) could not be translated and were skipped: greeting',
       )
       const invocation = invoke(['es', '--json'])
       await vi.runAllTimersAsync()

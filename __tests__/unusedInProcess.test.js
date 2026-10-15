@@ -3,7 +3,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { format } from 'node:util'
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 // eslint-disable-next-line import-js/no-extraneous-dependencies
 import {
   afterAll,
@@ -113,6 +115,15 @@ describe('unused-key scanning in process', () => {
       '/translations/es.json',
       '/src/Home.jsx',
     ]
+    expectConsoleError('find unused strings in project')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError(format({ locales: project.locales, paths: mocks.paths }))
+    expectConsoleError('Found 2 files in 2 locales:')
+    expectConsoleError('  /translations/en.json')
+    expectConsoleError('  /translations/es.json')
+    expectConsoleError('en: Found 2 keys')
+    expectConsoleError('es: Found 2 keys')
+    expectConsoleError('Found 2 unique keys across all 2 locales')
 
     await invoke(['--json'])
 
@@ -139,6 +150,16 @@ describe('unused-key scanning in process', () => {
       '/src/checkout.ts',
       '/src/greeting.cjs',
     ]
+    expectConsoleError('find unused strings in project')
+    expectConsoleError('Javascript project detected')
+    expectConsoleError(format({ locales: project.locales, paths: mocks.paths }))
+    expectConsoleError(
+      'No matching files for path translations/%lang%.json and locale es',
+    )
+    expectConsoleError('Found 1 files in 1 locales:')
+    expectConsoleError('  /translations/en.json')
+    expectConsoleError('en: Found 2 keys')
+    expectConsoleError('Found 2 unique keys across all 1 locales')
 
     await invoke(['--json'])
     expect(mocks.printJson).toHaveBeenCalledWith([])

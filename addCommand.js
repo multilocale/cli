@@ -33,8 +33,8 @@ function addCommand() {
   command.option('--project [project]', 'project id or name')
   command.option(
     '-m, --model <model>',
-    'translation model (uses local LLM if available: claude, codex; fallback to API: gpt-5.6-luna, gpt-5-mini, gemini-3.5-flash, claude-haiku-4-5)',
-    'gpt-5.6-luna',
+    'translation model (uses local LLM if available: claude, codex; fallback to API: gpt-6-luna, gpt-5-mini, gemini-3.5-flash, claude-haiku-4-5)',
+    'gpt-6-luna',
   )
   command.option(
     '-c, --context <context>',

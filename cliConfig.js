@@ -14,7 +14,9 @@ function getAppUrl() {
 // `signup` posts straight to the product API rather than going through
 // @multilocale/client: the client attaches whatever session it already has,
 // and signup is the one call that must be made with no credential but the
-// email and password being registered.
+// email and password being registered. Logging in from another device
+// (`login --device`, and the code the browser login prints) talks to it
+// directly for the same reason.
 function getApiUrl() {
   return process.env.MULTILOCALE_API_URL || 'https://api.multilocale.com'
 }

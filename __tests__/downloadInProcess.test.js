@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 // eslint-disable-next-line import-js/no-extraneous-dependencies
 import {
   afterAll,
@@ -114,9 +115,7 @@ describe('download workflow in process', () => {
       throw error
     })
     mocks.format = 'json'
-    mocks.getAndroidResPath.mockReturnValue(
-      path.join(directory, 'android', 'res'),
-    )
+    mocks.getAndroidResPath.mockReturnValue(path.join('android', 'res'))
     mocks.getPhrases.mockResolvedValue([
       { key: 'checkout.failed', language: 'en', value: 'Payment failed' },
       { key: 'greeting', language: 'en', value: 'Hello' },
@@ -132,6 +131,15 @@ describe('download workflow in process', () => {
   it('writes sorted nested dictionaries and an empty configured locale', async () => {
     mocks.nested = true
     mocks.header = '/* generated */\n'
+    expectConsoleError('download')
+    expectConsoleError('Project: website (project-1)')
+    expectConsoleError('Format: json')
+    expectConsoleError('Extension: json')
+    expectConsoleError('Nested: true')
+    expectConsoleError('Header: /* generated */\\n')
+    expectConsoleError('Found 2 phrases')
+    expectConsoleError('  en: /translations/en.json')
+    expectConsoleError('  fr: /translations/fr.json')
 
     await invoke(['--json'])
 
@@ -180,15 +188,21 @@ describe('download workflow in process', () => {
         value: 'Line 1\n"quoted"\\tail',
       },
     ])
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expectConsoleError('download')
+    expectConsoleError('Project: website (project-1)')
+    expectConsoleError('Format: swift')
+    expectConsoleError('Extension: strings')
+    expectConsoleError(
+      'Nested: ignored, the swift format is a flat key/value file',
+    )
+    expectConsoleError('Found 1 phrases')
+    expectConsoleError('  en: /ios/en.lproj/Localizable.strings')
+    expectConsoleError('  fr: /ios/fr.lproj/Localizable.strings')
 
     await invoke(['--json'])
 
     expect(read('ios/en.lproj/Localizable.strings')).toContain(
       '"quote\\"key" = "Line 1\\n\\"quoted\\"\\\\tail";',
-    )
-    expect(consoleError.mock.calls.flat().join('\n')).toContain(
-      'Nested: ignored',
     )
     expect(mocks.printJson).toHaveBeenCalledWith(
       expect.objectContaining({ format: 'swift', nested: false }),
@@ -207,6 +221,18 @@ describe('download workflow in process', () => {
       },
       { key: 'hello', language: 'es', value: 'Hola' },
     ])
+    expectConsoleError('download')
+    expectConsoleError('Project: website (project-1)')
+    expectConsoleError('Format: json')
+    expectConsoleError('Extension: json')
+    expectConsoleError(
+      'Nested: ignored, Android string resources are a flat key/value file',
+    )
+    expectConsoleError('Found 2 phrases')
+    expectConsoleError('Android project detected')
+    expectConsoleError('Found 2 languages')
+    expectConsoleError('en: /android/res/values/strings.xml')
+    expectConsoleError('es: /android/res/values-es/strings.xml')
 
     await invoke(['--json'])
 

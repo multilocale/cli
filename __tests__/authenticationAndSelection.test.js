@@ -1,5 +1,6 @@
 /* Copyright 2013 - 2026 Waiterio LLC */
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest' // eslint-disable-line import-js/no-extraneous-dependencies
 
 const mocks = vi.hoisted(() => ({
@@ -173,6 +174,7 @@ describe('credential resolution', () => {
       expect.objectContaining({
         appUrl: 'https://app.multilocale.com',
         binaryName: 'multilocale',
+        device: true,
         envKeyName: 'MULTILOCALE_API_KEY',
       }),
     )
@@ -192,10 +194,9 @@ describe('credential resolution', () => {
       configurable: true,
       value: true,
     })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expectConsoleError('Please login first')
 
     await expect(ensureAuth()).resolves.toBe(authenticated)
-    expect(consoleError).toHaveBeenCalledWith('Please login first')
     expect(mocks.login).toHaveBeenCalledOnce()
     expect(mocks.setAccessTokenForClient).toHaveBeenCalledWith('access-token')
   })
@@ -230,6 +231,14 @@ describe('project selection', () => {
     })
   })
 
+  it('does not overwrite an existing config when auto-selecting one project', async () => {
+    mocks.getConfig.mockReturnValue({ nested: true })
+    mocks.getProjects.mockResolvedValue([projects[0]])
+
+    await expect(getProject()).resolves.toEqual(projects[0])
+    expect(mocks.setConfig).not.toHaveBeenCalled()
+  })
+
   it('refuses to hang a headless caller when several projects need a choice', async () => {
     mocks.getProjects.mockResolvedValue(projects)
 
@@ -237,6 +246,19 @@ describe('project selection', () => {
       'This account has 2 projects and none was selected.',
     )
     expect(mocks.prompt).not.toHaveBeenCalled()
+  })
+
+  it('bounds a long headless project list and falls back to ids for nameless projects', async () => {
+    mocks.getProjects.mockResolvedValue(
+      Array.from({ length: 12 }, (_, index) => ({
+        _id: `project-${index + 1}`,
+        name: index === 0 ? '' : `Project ${index + 1}`,
+      })),
+    )
+
+    await expect(getProject()).rejects.toThrow(
+      'Projects: project-1, Project 10, Project 11, Project 12, Project 2, Project 3, Project 4, Project 5, Project 6, Project 7, … (2 more)',
+    )
   })
 
   it('sorts interactive choices and persists the selected project', async () => {
@@ -267,12 +289,33 @@ describe('project selection', () => {
 
 describe('agent-first command adapters', () => {
   it('opens the current app URL with the shared session store', async () => {
+    process.env.MULTILOCALE_API_URL = 'http://localhost:4500'
     process.env.MULTILOCALE_APP_URL = 'http://localhost:4173'
     await login()
     expect(mocks.loginWithBrowser).toHaveBeenCalledWith({
       appUrl: 'http://localhost:4173',
+      getApiUrl: expect.any(Function),
+      binaryName: 'multilocale',
+      version: expect.stringMatching(/^\d+\.\d+\.\d+/u),
       session: mocks.session,
     })
+    // The same request can be approved from another device, through the API.
+    expect(mocks.loginWithBrowser.mock.lastCall[0].getApiUrl()).toBe(
+      'http://localhost:4500',
+    )
+  })
+
+  it('lets the login command offer another device', () => {
+    process.env.MULTILOCALE_API_URL = 'http://localhost:4500'
+    const command = loginCommand()
+
+    expect(command.options).toEqual(
+      expect.objectContaining({
+        binaryName: 'multilocale',
+        version: expect.stringMatching(/^\d+\.\d+\.\d+/u),
+      }),
+    )
+    expect(command.options.getApiUrl()).toBe('http://localhost:4500')
   })
 
   it('wires signup, logout, and schema commands to the product contract', () => {
@@ -311,6 +354,16 @@ describe('agent-first command adapters', () => {
 
     mocks.getProjects.mockRejectedValueOnce(new Error('unauthorized'))
     await expect(command.options.verify()).rejects.toThrow('unauthorized')
+    expect(mocks.setApiKeyForClient).toHaveBeenLastCalledWith(null)
+  })
+
+  it('treats a count-free verification response as zero accessible projects', async () => {
+    mocks.getProjects.mockResolvedValue(undefined)
+    const command = loginCommand()
+
+    await expect(command.options.verify()).resolves.toBe(
+      'Logged in with an API key — 0 project(s) accessible.',
+    )
     expect(mocks.setApiKeyForClient).toHaveBeenLastCalledWith(null)
   })
 })

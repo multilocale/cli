@@ -1,5 +1,6 @@
 /* Copyright 2013 - 2026 Waiterio LLC */
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest' // eslint-disable-line import-js/no-extraneous-dependencies
 
 const mocks = vi.hoisted(() => ({
@@ -63,6 +64,7 @@ const project = {
   context: 'Customer support dashboard',
   creationTime: '2026-01-01T00:00:00.000Z',
   defaultLocale: 'en',
+  lastEditTime: '2026-01-02T00:00:00.000Z',
   locales: ['en', 'es'],
   logo: 'logo.png',
   name: 'website',
@@ -133,6 +135,20 @@ describe('project discovery', () => {
     )
   })
 
+  it('makes empty and human-readable discovery useful without JSON tooling', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(['list'])
+    expect(consoleLog).toHaveBeenCalledWith('No projects found')
+
+    await invoke(['get', 'website'])
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain('website')
+
+    mocks.getProjects.mockResolvedValue([project])
+    await invoke(['get'])
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain('project-1')
+  })
+
   it('formats a readable project summary without omitting identity fields', async () => {
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
     await invoke(['read', 'website'])
@@ -141,6 +157,21 @@ describe('project discovery', () => {
     expect(output).toContain('project-1')
     expect(output).toContain('organization-1')
     expect(output).toContain('2026-01-01T00:00:00.000Z')
+  })
+
+  it('supports JSON reads and safely renders sparse legacy projects', async () => {
+    await invoke(['read', 'website', '--json'])
+    expect(mocks.printJson).toHaveBeenCalledWith(project)
+
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mocks.getProject.mockResolvedValueOnce({ _id: 'legacy-project' })
+    await invoke(['read', 'legacy-project'])
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain('legacy-project')
+
+    mocks.getProject.mockResolvedValueOnce(undefined)
+    await expect(invoke(['read', 'removed-project'])).rejects.toThrow(
+      'Project not found',
+    )
   })
 })
 
@@ -183,6 +214,23 @@ describe('project mutation', () => {
     })
   })
 
+  it('explains configured and default paths in human-readable create output', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke([
+      'create',
+      'website-with-paths',
+      '--paths',
+      'translations/%lang%.json',
+    ])
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain(
+      'Paths (1): translations/%lang%.json',
+    )
+
+    await invoke(['create', 'website-with-defaults'])
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain('Paths: not set')
+  })
+
   it('merges updates into the full project so omitted fields are preserved', async () => {
     mocks.buildProjectUpdate.mockReturnValue({
       locales: ['en', 'es', 'fr'],
@@ -216,6 +264,38 @@ describe('project mutation', () => {
     )
   })
 
+  it('falls back to the submitted update and formats array and scalar changes', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mocks.buildProjectUpdate.mockReturnValue({
+      context: 'Checkout labels',
+      locales: ['en', 'it'],
+    })
+    mocks.updateProject.mockResolvedValueOnce(undefined)
+
+    await invoke([
+      'update',
+      'website',
+      '--context',
+      'Checkout labels',
+      '--locales',
+      'it',
+    ])
+
+    const output = consoleLog.mock.calls.flat().join('\n')
+    expect(output).toContain('context: Checkout labels')
+    expect(output).toContain('locales: en, it')
+    expect(output).toContain('Updated project: website (project-1)')
+  })
+
+  it('does not send an update when the selected project disappeared', async () => {
+    mocks.getProject.mockResolvedValueOnce(undefined)
+
+    await expect(
+      invoke(['update', 'removed-project', '--name', 'new']),
+    ).rejects.toThrow('Project removed-project not found')
+    expect(mocks.updateProject).not.toHaveBeenCalled()
+  })
+
   it('requires explicit non-interactive confirmation before deletion', async () => {
     mocks.getPhrases.mockResolvedValue([
       { key: 'greeting', language: 'en' },
@@ -228,6 +308,8 @@ describe('project mutation', () => {
     )
     expect(mocks.deleteProject).not.toHaveBeenCalled()
 
+    expectConsoleError('Project: website (project-1)')
+    expectConsoleError('Phrases: 3 rows across 2 keys')
     await invoke(['delete', 'website', '--yes', '--json'])
     expect(mocks.deleteProject).toHaveBeenCalledWith('project-1')
     expect(mocks.printJson).toHaveBeenCalledWith({
@@ -247,5 +329,27 @@ describe('project mutation', () => {
     mocks.prompt.mockResolvedValueOnce({ confirmation: 'website' })
     await invoke(['delete', 'website'])
     expect(mocks.deleteProject).toHaveBeenCalledWith('project-1')
+  })
+
+  it('does not delete a project that disappeared before confirmation', async () => {
+    mocks.getProject.mockResolvedValueOnce(undefined)
+
+    await expect(
+      invoke(['delete', 'removed-project', '--yes']),
+    ).rejects.toThrow('Project removed-project not found')
+    expect(mocks.getPhrases).not.toHaveBeenCalled()
+    expect(mocks.deleteProject).not.toHaveBeenCalled()
+  })
+
+  it('uses safe zero counts when legacy delete responses omit details', async () => {
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+    mocks.getPhrases.mockResolvedValueOnce(undefined)
+    mocks.deleteProject.mockResolvedValueOnce(undefined)
+
+    await invoke(['delete', 'website', '--yes'])
+
+    const output = consoleLog.mock.calls.flat().join('\n')
+    expect(output).toContain('Phrases: 0 rows across 0 keys')
+    expect(output).toContain('0 phrases deleted, 0 detached')
   })
 })

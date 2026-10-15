@@ -87,6 +87,18 @@ describe('buildProjectUpdate', () => {
     expect(changes.paths).toEqual(['messages/%lang%.json'])
   })
 
+  it('allows project translation context to be set and cleared explicitly', () => {
+    expect(
+      buildProjectUpdate({
+        existing,
+        options: { context: 'Restaurant checkout copy' },
+      }),
+    ).toEqual({ context: 'Restaurant checkout copy' })
+    expect(buildProjectUpdate({ existing, options: { context: '' } })).toEqual({
+      context: '',
+    })
+  })
+
   it('does not touch locales when only paths change', () => {
     // A paths-only update must not rewrite the locale list at all — sending a
     // recomputed one back is how an unrelated flag ends up mutating it.

@@ -4,9 +4,10 @@ import { setApiKeyForMultilocaleClient } from '@multilocale/client/apiKey.js'
 import getProjectsModule from '@multilocale/client/getProjects.js'
 
 import __module1 from './cliConfig.js'
+import packageJson from './package.json' with { type: 'json' }
 import session from './sessionStore.js'
 
-const { BINARY_NAME, ENV_KEY_NAME, getAppUrl } = __module1
+const { BINARY_NAME, ENV_KEY_NAME, getApiUrl, getAppUrl } = __module1
 
 const getProjects = getProjectsModule.default || getProjectsModule
 
@@ -29,6 +30,8 @@ function loginCommand() {
   return agentfirstLoginCommand({
     binaryName: BINARY_NAME,
     appUrl: getAppUrl(),
+    getApiUrl,
+    version: packageJson.version,
     session,
     verify,
     envKeyName: ENV_KEY_NAME,

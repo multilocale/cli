@@ -4,12 +4,14 @@ import createVitestConfig from '@monorepool/root/vitest.createConfig.js' // esli
 export default createVitestConfig({
   include: ['**/__tests__/**/*.test.{js,jsx}'],
   exclude: ['**/node_modules/**', '**/dist/**'],
+  // downloadFixture is an ESM preload used only by a child-process test.
+  coverageExclude: ['__tests__/downloadFixture.js'],
   coverage: {
     thresholds: {
-      statements: 89,
-      branches: 80,
-      functions: 92,
-      lines: 89,
+      statements: 92,
+      branches: 90,
+      functions: 95,
+      lines: 91,
     },
   },
 })

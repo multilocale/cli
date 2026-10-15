@@ -1,5 +1,6 @@
 /* Copyright 2013 - 2026 Waiterio LLC */
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest' // eslint-disable-line import-js/no-extraneous-dependencies
 
 const mocks = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   getProjectByIdOrName: vi.fn(),
   printJson: vi.fn(),
   translateToAllLanguages: vi.fn(),
+  translateToAllLanguagesLocal: vi.fn(),
   updatePhrase: vi.fn(),
   uuid: vi.fn(),
 }))
@@ -39,6 +41,9 @@ vi.mock('@multilocale/client/getProject.js', () => ({
 vi.mock('@multilocale/client/translateToAllLanguages.js', () => ({
   default: (...args) => mocks.translateToAllLanguages(...args),
 }))
+vi.mock('@multilocale/client/translateToAllLanguagesLocal.js', () => ({
+  default: (...args) => mocks.translateToAllLanguagesLocal(...args),
+}))
 vi.mock('@multilocale/client/updatePhrase.js', () => ({
   default: (...args) => mocks.updatePhrase(...args),
 }))
@@ -57,7 +62,10 @@ const deleteCommand = (await import('../deleteCommand.js')).default
 const duplicatesCommand = (await import('../duplicatesCommand.js')).default
 const phrasesCommand = (await import('../phrasesCommand.js')).default
 const shareCommand = (await import('../shareCommand.js')).default
+const unshareCommand = (await import('../unshareCommand.js')).default
 const updateCommand = (await import('../updateCommand.js')).default
+
+const localTranslationError = new Error('local translation disabled in tests')
 
 const project = {
   _id: 'project-1',
@@ -88,6 +96,7 @@ beforeEach(() => {
     name,
   }))
   mocks.translateToAllLanguages.mockResolvedValue({ es: 'Hola', fr: 'Bonjour' })
+  mocks.translateToAllLanguagesLocal.mockRejectedValue(localTranslationError)
   mocks.updatePhrase.mockResolvedValue(undefined)
   let uuid = 0
   mocks.uuid.mockImplementation(() => {
@@ -98,6 +107,16 @@ beforeEach(() => {
 
 describe('adding and deleting phrase sets', () => {
   it('creates an original phrase and one machine translation per target locale', async () => {
+    expectConsoleError('add string')
+    expectConsoleError('en: Hello')
+    expectConsoleError('attempting local LLM translation...')
+    expectConsoleError(
+      'local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('falling back to multilocale API...')
+    expectConsoleError('es: Hola')
+    expectConsoleError('fr: Bonjour')
+
     await invoke(addCommand, [
       'greeting',
       'Hello',
@@ -148,6 +167,16 @@ describe('adding and deleting phrase sets', () => {
 
   it('uses the key as the default value and refuses a duplicate', async () => {
     mocks.getPhrases.mockResolvedValueOnce([])
+    expectConsoleError('add string')
+    expectConsoleError('value not provided, using key as value')
+    expectConsoleError('en: settings')
+    expectConsoleError('attempting local LLM translation...')
+    expectConsoleError(
+      'local translation unavailable: local translation disabled in tests',
+    )
+    expectConsoleError('falling back to multilocale API...')
+    expectConsoleError('es: Hola')
+    expectConsoleError('fr: Bonjour')
     await invoke(addCommand, ['settings', '--json'])
     expect(mocks.addPhrases).toHaveBeenCalledWith([
       expect.objectContaining({ key: 'settings', value: 'settings' }),
@@ -162,6 +191,28 @@ describe('adding and deleting phrase sets', () => {
       'already exists in project',
     )
     expect(mocks.addPhrases).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses English safely when a legacy project has no default locale', async () => {
+    mocks.getProject.mockResolvedValueOnce({
+      ...project,
+      defaultLocale: undefined,
+      locales: ['en'],
+    })
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(addCommand, ['health.check', 'Healthy'])
+
+    expect(mocks.addPhrases).toHaveBeenCalledWith([
+      expect.objectContaining({
+        key: 'health.check',
+        language: 'en',
+        value: 'Healthy',
+      }),
+    ])
+    expect(mocks.translateToAllLanguages).not.toHaveBeenCalled()
+    expect(mocks.translateToAllLanguagesLocal).not.toHaveBeenCalled()
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain('Added 1 phrases')
   })
 
   it('deletes every locale row and reports a null result as zero', async () => {
@@ -191,6 +242,17 @@ describe('adding and deleting phrase sets', () => {
 
     expect(consoleLog).toHaveBeenCalledWith(
       'Deleted phrases for key "obsolete.key" from project "website" (2 entries)',
+    )
+  })
+
+  it('reports zero when a legacy delete response has no row list', async () => {
+    mocks.deletePhrases.mockResolvedValue(undefined)
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(deleteCommand, ['obsolete.key'])
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      'Deleted phrases for key "obsolete.key" from project "website" (0 entries)',
     )
   })
 })
@@ -247,6 +309,15 @@ describe('querying and diagnosing phrases', () => {
       project: 'website',
     })
     expect(mocks.printJson).toHaveBeenCalledWith([phrases[0]])
+
+    mocks.printJson.mockClear()
+    await invoke(phrasesCommand, ['list', '--json'])
+    expect(mocks.printJson).toHaveBeenCalledWith(phrases)
+
+    mocks.printJson.mockClear()
+    await invoke(phrasesCommand, ['get', '--json'])
+    expect(mocks.getPhrases).toHaveBeenLastCalledWith({ project: 'website' })
+    expect(mocks.printJson).toHaveBeenCalledWith(phrases)
   })
 
   it('groups duplicate values with their cross-project provenance', async () => {
@@ -262,8 +333,32 @@ describe('querying and diagnosing phrases', () => {
     expect(consoleLog.mock.calls.flat().join('\n')).toContain('dashboard')
 
     mocks.getPhrases.mockResolvedValue([{ key: 'unique', value: 'Only once' }])
+    expectConsoleError(
+      'Fetching phrases for language "en" in project "website"...',
+    )
     await invoke(duplicatesCommand, ['--json'])
     expect(mocks.printJson).toHaveBeenLastCalledWith([])
+  })
+
+  it('uses English for legacy projects and explains a clean duplicate scan', async () => {
+    mocks.getProject.mockResolvedValueOnce({
+      ...project,
+      defaultLocale: undefined,
+    })
+    mocks.getPhrases.mockResolvedValue([
+      { key: 'unique', value: 'Only once', projects: ['website'] },
+    ])
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(duplicatesCommand, [])
+
+    expect(mocks.getPhrases).toHaveBeenCalledWith({
+      language: 'en',
+      project: 'website',
+    })
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain(
+      'No duplicate values found.',
+    )
   })
 
   it('distinguishes empty results, language summaries, and readable phrase output', async () => {
@@ -348,6 +443,41 @@ describe('updating and sharing phrases', () => {
     )
   })
 
+  it('reports an unchanged legacy-project phrase to a terminal user', async () => {
+    mocks.getProject.mockResolvedValueOnce({
+      ...project,
+      defaultLocale: undefined,
+    })
+    mocks.getPhrases.mockResolvedValueOnce([
+      { key: 'greeting', language: 'en', value: 'Hello' },
+    ])
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(updateCommand, ['greeting', 'Hello'])
+
+    expect(mocks.getPhrases).toHaveBeenCalledWith({
+      key: 'greeting',
+      language: 'en',
+      project: 'website',
+    })
+    expect(mocks.updatePhrase).not.toHaveBeenCalled()
+    expect(consoleLog).toHaveBeenCalledWith(
+      'No change: en value is already "Hello"',
+    )
+  })
+
+  it('falls back to the current project when a legacy phrase has no memberships', async () => {
+    mocks.getPhrases.mockResolvedValueOnce([
+      { key: 'greeting', language: 'en', value: 'Hello' },
+    ])
+
+    await invoke(updateCommand, ['greeting', 'Hi', '--json'])
+
+    expect(mocks.printJson).toHaveBeenCalledWith(
+      expect.objectContaining({ projects: ['website'] }),
+    )
+  })
+
   it('warns a terminal user before changing a phrase shared by several projects', async () => {
     mocks.getPhrases.mockResolvedValue([
       {
@@ -391,6 +521,9 @@ describe('updating and sharing phrases', () => {
         value: 'Hola',
       },
     ])
+    expectConsoleError('Skipping website (same as source)')
+    expectConsoleError('Sharing 2 phrase(s) from "website" with dashboard')
+    expectConsoleError('  Shared en: Hello')
 
     await invoke(shareCommand, ['greeting', 'website', 'dashboard', '--json'])
 
@@ -414,6 +547,7 @@ describe('updating and sharing phrases', () => {
 
   it('returns cleanly when every requested target is the source project', async () => {
     mocks.getProjectByIdOrName.mockResolvedValue(project)
+    expectConsoleError('Skipping website (same as source)')
     await invoke(shareCommand, ['greeting', 'website', '--json'])
 
     expect(mocks.getPhrases).not.toHaveBeenCalled()
@@ -425,6 +559,47 @@ describe('updating and sharing phrases', () => {
       targets: [],
       updated: 0,
     })
+  })
+
+  it('explains a source-only share request to a terminal user', async () => {
+    mocks.getProjectByIdOrName.mockResolvedValue(project)
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(shareCommand, ['greeting', 'website'])
+
+    expect(mocks.getPhrases).not.toHaveBeenCalled()
+    expect(mocks.updatePhrase).not.toHaveBeenCalled()
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain(
+      'No targets to attach',
+    )
+  })
+
+  it('repairs missing membership arrays on legacy phrase rows', async () => {
+    mocks.getProjectByIdOrName.mockResolvedValueOnce({
+      _id: 'project-2',
+      name: 'dashboard',
+    })
+    mocks.getPhrases.mockResolvedValueOnce([
+      {
+        _id: 'phrase-en',
+        key: 'greeting',
+        language: 'en',
+        value: 'Hello',
+      },
+    ])
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(shareCommand, ['greeting', 'dashboard'])
+
+    expect(mocks.updatePhrase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projects: ['dashboard'],
+        projectsIds: ['project-2'],
+      }),
+    )
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain(
+      'Updated 1/1 phrase(s)',
+    )
   })
 
   it('rejects a missing target or a key with no source phrase rows', async () => {
@@ -441,5 +616,111 @@ describe('updating and sharing phrases', () => {
     await expect(
       invoke(shareCommand, ['greeting', 'dashboard']),
     ).rejects.toThrow('no phrase found with key "greeting"')
+  })
+
+  it('detaches the current project from every locale row and keeps the other projects', async () => {
+    mocks.getPhrases.mockResolvedValue([
+      {
+        _id: 'phrase-en',
+        key: 'greeting',
+        language: 'en',
+        projects: ['website', 'dashboard'],
+        projectsIds: ['project-1', 'project-2'],
+        value: 'Hello',
+      },
+      {
+        _id: 'phrase-es',
+        key: 'greeting',
+        language: 'es',
+        projects: ['dashboard', 'website'],
+        projectsIds: ['project-2', 'project-1'],
+        value: 'Hola',
+      },
+    ])
+    expectConsoleError('Detaching "website" from 2 phrase(s)')
+    expectConsoleError('  Detached en: Hello')
+    expectConsoleError('  Detached es: Hola')
+
+    await invoke(unshareCommand, ['greeting', '--json'])
+
+    expect(mocks.getPhrases).toHaveBeenCalledWith({
+      key: 'greeting',
+      project: 'website',
+    })
+    expect(mocks.deletePhrases).not.toHaveBeenCalled()
+    expect(mocks.updatePhrase).toHaveBeenCalledTimes(2)
+    for (const _id of ['phrase-en', 'phrase-es']) {
+      expect(mocks.updatePhrase).toHaveBeenCalledWith(
+        expect.objectContaining({
+          _id,
+          projects: ['dashboard'],
+          projectsIds: ['project-2'],
+        }),
+      )
+    }
+    expect(mocks.printJson).toHaveBeenCalledWith({
+      key: 'greeting',
+      ok: true,
+      project: 'website',
+      updated: 2,
+    })
+  })
+
+  it('reports a detach to a terminal user', async () => {
+    mocks.getPhrases.mockResolvedValue([
+      {
+        _id: 'phrase-en',
+        key: 'greeting',
+        language: 'en',
+        projects: ['website', 'dashboard'],
+        projectsIds: ['project-1', 'project-2'],
+        value: 'Hello',
+      },
+    ])
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await invoke(unshareCommand, ['greeting'])
+
+    expect(consoleLog.mock.calls.flat().join('\n')).toContain(
+      'Updated 1 phrase(s) — removed project "website"',
+    )
+  })
+
+  it('refuses to orphan a phrase that only the current project uses', async () => {
+    mocks.getPhrases.mockResolvedValueOnce([
+      {
+        _id: 'phrase-en',
+        key: 'greeting',
+        language: 'en',
+        projects: ['website', 'dashboard'],
+        projectsIds: ['project-1', 'project-2'],
+        value: 'Hello',
+      },
+      {
+        _id: 'phrase-es',
+        key: 'greeting',
+        language: 'es',
+        projects: ['website'],
+        projectsIds: ['project-1'],
+        value: 'Hola',
+      },
+    ])
+    await expect(invoke(unshareCommand, ['greeting'])).rejects.toThrow(
+      '"greeting" is not shared: 1 of its 2 phrase(s) belong only to "website"',
+    )
+
+    // Legacy rows with no membership arrays are not shared with anyone either.
+    mocks.getPhrases.mockResolvedValueOnce([
+      { _id: 'phrase-en', key: 'greeting', language: 'en', value: 'Hello' },
+    ])
+    await expect(invoke(unshareCommand, ['greeting'])).rejects.toThrow(
+      'is not shared',
+    )
+
+    mocks.getPhrases.mockResolvedValueOnce([])
+    await expect(invoke(unshareCommand, ['greeting'])).rejects.toThrow(
+      'no phrase found with key "greeting" in project "website"',
+    )
+    expect(mocks.updatePhrase).not.toHaveBeenCalled()
   })
 })

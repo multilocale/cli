@@ -3,7 +3,9 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { format } from 'node:util'
 
+import { expectConsoleError } from '@monorepool/root/vitest.strict.js'
 // eslint-disable-next-line import-js/no-extraneous-dependencies
 import {
   afterAll,
@@ -52,6 +54,7 @@ const cliGetUrl = (await import('../cliGetUrl.js')).default
 const getExtension = (await import('../getExtension.js')).default
 const getFormat = (await import('../getFormat.js')).default
 const getHeader = (await import('../getHeader.js')).default
+const getNested = (await import('../getNested.js')).default
 const getPaths = (await import('../getPaths.js')).default
 const getPostScript = (await import('../getPostScript.js')).default
 const clearSession = (await import('../session/clearSession.js')).default
@@ -99,6 +102,7 @@ describe('format and path configuration', () => {
       extension: 'catalogue',
       format: 'esm',
       header: '// generated\n',
+      nested: true,
       paths: ['i18n/%lang%.catalogue'],
       postScript: 'pnpm format',
     }
@@ -120,6 +124,8 @@ describe('format and path configuration', () => {
     await expect(getFormat()).resolves.toBe('esm')
     await expect(getExtension()).resolves.toBe('catalogue')
     await expect(getHeader()).resolves.toBe('// generated\n')
+    await expect(getNested()).resolves.toBe(true)
+    await expect(getNested({ nested: false })).resolves.toBe(false)
     await expect(getPostScript()).resolves.toBe('pnpm format')
     expect(getPaths({ project: {} })).toEqual(['i18n/%lang%.catalogue'])
   })
@@ -127,6 +133,7 @@ describe('format and path configuration', () => {
   it('provides safe defaults and rejects unsupported formats', async () => {
     await expect(getFormat()).resolves.toBe('json')
     await expect(getHeader()).resolves.toBe('')
+    await expect(getNested()).resolves.toBe(false)
     await expect(getPostScript()).resolves.toBe('')
     await expect(
       getPostScript({ 'post-script': 'node verify.js' }),
@@ -316,11 +323,10 @@ describe('legacy session compatibility helpers', () => {
     mocks.localStorage.setItem.mockImplementationOnce(() => {
       throw error
     })
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    expectConsoleError(format('error', error))
 
     await expect(
       storeNewSession({ accessToken: 'access-3', refreshToken: 'refresh-3' }),
     ).rejects.toBe(error)
-    expect(consoleError).toHaveBeenCalledWith('error', error)
   })
 })
